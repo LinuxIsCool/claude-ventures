@@ -7,6 +7,5 @@
   "keywords": ["ventures", "portfolio", "projects", "deadlines", "milestones", "creative"],
   "skills": ["./skills/"],
   "commands": ["./commands/"],
-  "agents": ["./agents/venture-navigator.md"],
-  "mcpServers": "./.mcp.json"
+  "agents": ["./agents/venture-navigator.md"]
 }
