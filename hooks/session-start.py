@@ -8,6 +8,8 @@ Session-start hook for claude-ventures.
 Reads active ventures and injects context about approaching deadlines.
 """
 
+import json
+import sys
 from datetime import date
 from pathlib import Path
 import yaml
@@ -27,6 +29,11 @@ def parse_frontmatter(content: str) -> dict:
 
 
 def main():
+    try:
+        json.loads(sys.stdin.read() or "{}")
+    except Exception:
+        pass
+
     today = date.today()
 
     ventures = []
@@ -63,20 +70,38 @@ def main():
     if not ventures:
         return
 
-    parts = [f"Active ventures: {len(ventures)}."]
+    # Compact systemMessage for user banner
+    sys_parts = [f"[ventures] {len(ventures)} active"]
+    # Detailed additionalContext for Claude
+    ctx_parts = [f"Active ventures: {len(ventures)}."]
 
     if urgent:
         urgent.sort(key=lambda x: x["days"])
         for u in urgent:
             if u["days"] < 0:
-                parts.append(f"OVERDUE: {u['venture']} — {u['label']} ({abs(u['days'])}d overdue)")
+                sys_parts.append(f"{u['venture']} ({abs(u['days'])}d OVERDUE)")
+                ctx_parts.append(f"OVERDUE: {u['venture']} — {u['label']} ({abs(u['days'])}d overdue)")
             elif u["days"] == 0:
-                parts.append(f"DUE TODAY: {u['venture']} — {u['label']}")
+                sys_parts.append(f"{u['venture']} (DUE TODAY)")
+                ctx_parts.append(f"DUE TODAY: {u['venture']} — {u['label']}")
             else:
-                parts.append(f"Deadline approaching: {u['venture']} — {u['label']} ({u['days']}d)")
+                sys_parts.append(f"{u['venture']} ({u['days']}d)")
+                ctx_parts.append(f"Deadline approaching: {u['venture']} — {u['label']} ({u['days']}d)")
 
-    print(" ".join(parts))
+    sys_msg = " · ".join(sys_parts)
+    ctx_msg = " ".join(ctx_parts)
+
+    print(json.dumps({
+        "systemMessage": sys_msg,
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": ctx_msg,
+        },
+    }))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        pass
