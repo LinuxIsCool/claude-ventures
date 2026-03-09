@@ -1,0 +1,23 @@
+{
+  "name": "claude-ventures",
+  "version": "0.1.0",
+  "description": "Venture portfolio management — track creative, research, and professional initiatives across their full lifecycle",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/mcp/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "gray-matter": "^4.0.3",
+    "nanoid": "^5.0.9",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
