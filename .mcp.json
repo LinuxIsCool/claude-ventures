@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "claude-ventures": {
-      "command": "bun",
-      "args": ["run", "src/mcp/server.ts"],
-      "cwd": "."
-    }
-  }
-}
