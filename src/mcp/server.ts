@@ -17,6 +17,7 @@ import { store } from "../store/markdown";
 import { ensureDirectories, isInitialized, paths, loadConfig, saveConfig } from "../config";
 import { calculatePriority, createDefaultContext, getUrgentVentures } from "../priority/calculator";
 import type { CreateVentureInput, UpdateVentureInput, VentureQuery, VentureFilter } from "../types";
+import { localDateStr } from "../utils/dates";
 
 import {
   ventureCreateSchema,
@@ -421,7 +422,7 @@ async function main() {
           };
 
           const invoice = await store.addInvoice(input.venture_id, {
-            date: input.date || new Date().toISOString().split("T")[0],
+            date: input.date || localDateStr(),
             amount: {
               amount: input.amount,
               currency: input.currency || "CAD",

@@ -29,6 +29,7 @@ import {
   getVentureDirectory,
   loadConfig,
 } from "../config";
+import { localDateStr } from "../utils/dates";
 import { calculatePriority, createDefaultContext, sortByPriority } from "../priority/calculator";
 
 // =============================================================================
@@ -485,7 +486,7 @@ export function createMarkdownStore(): VentureStore {
 
       if (notes) {
         const existingNotes = venture.notes || "";
-        const timestamp = new Date().toISOString().split("T")[0];
+        const timestamp = localDateStr();
         updates.notes = `${existingNotes}\n\n## ${timestamp}: Stage → ${newStage}\n\n${notes}`.trim();
       }
 
