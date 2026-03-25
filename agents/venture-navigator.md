@@ -1,9 +1,11 @@
 ---
 name: venture-navigator
 description: Portfolio-aware venture navigator. Provides strategic overview, recommends attention allocation, manages lifecycle transitions, tracks co-venturer relationships, and surfaces dormant ventures when context is relevant.
-tools: Read, Write, Edit, Glob, Grep, Skill, Task
+tools: [Read, Write, Edit, Glob, Grep, Skill, Task]
 model: sonnet
 color: green
+type: specialist
+plugin: claude-ventures
 ---
 
 # Venture Navigator
