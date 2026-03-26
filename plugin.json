@@ -1,0 +1,39 @@
+{
+  "name": "claude-ventures",
+  "version": "0.1.0",
+  "description": "Venture portfolio management \u2014 track creative, research, and professional initiatives across their full lifecycle",
+  "author": {
+    "name": "Shawn Whitney Anderson"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ventures",
+    "portfolio",
+    "projects",
+    "deadlines",
+    "milestones",
+    "creative"
+  ],
+  "skills": [
+    "./skills/"
+  ],
+  "commands": [
+    "./commands/"
+  ],
+  "agents": [
+    "./agents/venture-navigator.md"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
