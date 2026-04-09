@@ -1,0 +1,154 @@
+<h2>Fractal Field Matrix</h2>
+<p class="subtitle">What each level shares vs. what's unique — based on your real venture data</p>
+
+<div class="section">
+  <h3>The Shared Kernel (every level has these)</h3>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px">
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">id</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">title</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">description</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">stage</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">priority</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">deadlines[ ]</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">tags[ ]</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">links{ }</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">notes (body)</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">created_at</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">updated_at</div>
+    <div style="background:#1a2a1a;border:1px solid #52be80;border-radius:6px;padding:10px;text-align:center;font-size:13px;color:#52be80">calculated_priority</div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>Level-Specific Fields — from real venture data</h3>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="border-bottom:2px solid #444">
+        <th style="text-align:left;padding:10px 8px;color:#aaa;font-weight:500">Field</th>
+        <th style="text-align:center;padding:10px 8px;color:#7ecfff">🚀 Venture</th>
+        <th style="text-align:center;padding:10px 8px;color:#5dade2">📁 Project</th>
+        <th style="text-align:center;padding:10px 8px;color:#52be80">🎯 Milestone</th>
+        <th style="text-align:center;padding:10px 8px;color:#f7c948">✅ Deliverable</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">type</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">creative/consulting/etc</span></td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">delivery/research/admin</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">owner</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">single person</span></td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓ <span style="color:#666;font-size:11px">single person</span></td>
+        <td style="text-align:center;padding:8px;color:#f7c948">✓ <span style="color:#666;font-size:11px">single person</span></td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">co_venturers[ ]</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">strategic partners</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">team[ ]</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">contributors on this work</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">financial (full)</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">invoices, rates, funding</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">budget (lightweight)</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">estimated / spent / currency</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">estimated_hours</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓</td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓</td>
+        <td style="text-align:center;padding:8px;color:#f7c948">✓</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">completion_criteria</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">definition of done</span></td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓ <span style="color:#666;font-size:11px">specific criteria</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">status</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">pending/active/blocked/done</span></td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓ <span style="color:#666;font-size:11px">same</span></td>
+        <td style="text-align:center;padding:8px;color:#f7c948">✓ <span style="color:#666;font-size:11px">same</span></td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">data paths</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">root, media, transcripts</span></td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">root only</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">integrations (github etc)</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">repo + logging + matrix</span></td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">github issues label</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222;background:#111">
+        <td style="padding:8px;color:#ccc">related_[ ]</td>
+        <td style="text-align:center;padding:8px;color:#7ecfff">✓ <span style="color:#666;font-size:11px">related ventures (strategic alignment)</span></td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">related projects (cross-venture)</span></td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+      </tr>
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:8px;color:#ccc">completed / completed_at</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓</td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓</td>
+        <td style="text-align:center;padding:8px;color:#f7c948">✓</td>
+      </tr>
+      <tr style="background:#111">
+        <td style="padding:8px;color:#ccc">parent_id</td>
+        <td style="text-align:center;padding:8px;color:#666">—</td>
+        <td style="text-align:center;padding:8px;color:#5dade2">✓ <span style="color:#666;font-size:11px">venture_id</span></td>
+        <td style="text-align:center;padding:8px;color:#52be80">✓ <span style="color:#666;font-size:11px">project_id</span></td>
+        <td style="text-align:center;padding:8px;color:#f7c948">✓ <span style="color:#666;font-size:11px">milestone_id (embedded)</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:#1a1a2e;border-radius:8px;padding:16px;border:1px solid #f7c948">
+  <h3 style="color:#f7c948;margin-bottom:8px">⚠ Naming shift from real data</h3>
+  <p style="color:#aaa;font-size:13px">Your current "milestones" (Week 1 handoff, Week 2 pipeline…) are actually <strong style="color:#5dade2">Projects</strong>. Your current "deliverables" (Schema design, API layer…) are actually <strong style="color:#52be80">Milestones</strong>. The fractal rename clarifies the hierarchy and the level of granularity implied at each layer.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;font-size:13px">
+    <div style="background:#111;border-radius:6px;padding:10px">
+      <div style="color:#888;margin-bottom:6px">BEFORE (current naming)</div>
+      <div style="color:#aaa">Venture → <span style="color:#e05c5c">Milestone</span> → <span style="color:#e05c5c">Deliverable</span></div>
+      <div style="color:#666;font-size:11px;margin-top:4px">IndigenomicsAI → "Week 2 pipeline" → "Embedding + vector index"</div>
+    </div>
+    <div style="background:#111;border-radius:6px;padding:10px">
+      <div style="color:#888;margin-bottom:6px">AFTER (fractal naming)</div>
+      <div style="color:#aaa">Venture → <span style="color:#5dade2">Project</span> → <span style="color:#52be80">Milestone</span> → <span style="color:#f7c948">Deliverable</span></div>
+      <div style="color:#666;font-size:11px;margin-top:4px">IndigenomicsAI → "Week 2 pipeline" → "Embedding + vector index"</div>
+    </div>
+  </div>
+</div>

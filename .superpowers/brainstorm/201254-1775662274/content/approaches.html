@@ -1,0 +1,77 @@
+<h2>Three Architectural Approaches</h2>
+<p class="subtitle">The pivotal question: how do Projects and Milestones live on disk?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Fully Flat — three sibling directories</h3>
+      <p>Each entity type gets its own flat directory at the same level. Parent-child relationships encoded only in <code>parent_id</code> frontmatter. No stage subdirs for projects/milestones — stage is just a YAML field.</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.8">
+        <div style="color:#7ecfff">~/.claude/local/</div>
+        <div style="margin-left:16px;color:#7ecfff">ventures/active/indigenomics-ai.md</div>
+        <div style="margin-left:16px;color:#7ecfff">ventures/dormant/salish-sea-dreaming.md</div>
+        <div style="margin-left:16px;color:#5dade2">projects/data-platform.md <span style="color:#555">← venture_id: indigenomics-ai</span></div>
+        <div style="margin-left:16px;color:#5dade2">projects/governance-model.md <span style="color:#555">← venture_id: indigenomics-ai</span></div>
+        <div style="margin-left:16px;color:#5dade2">projects/herring-pipeline.md <span style="color:#555">← venture_id: salish-sea-dreaming</span></div>
+        <div style="margin-left:16px;color:#52be80">milestones/schema-design.md <span style="color:#555">← project_id: data-platform</span></div>
+        <div style="margin-left:16px;color:#52be80">milestones/api-layer.md <span style="color:#555">← project_id: data-platform</span></div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Stage transitions = frontmatter only, no file moves</li><li>Simplest store code</li><li>Research agent recommendation</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>All projects mixed together in one dir</li><li>Not human-readable at filesystem level</li><li>Harder to understand without tooling</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Parent-Grouped — nested by parent, flat by stage</h3>
+      <p>Projects live inside a sibling directory to their venture file. Milestones live inside a sibling to their project file. No stage subdirectories for child levels — stage is just a YAML field. When a venture changes stage, only the venture file moves; child directories stay in place (resolved by parent_id).</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.8">
+        <div style="color:#7ecfff">~/.claude/local/ventures/active/</div>
+        <div style="margin-left:16px;color:#7ecfff">indigenomics-ai.md</div>
+        <div style="margin-left:16px;color:#7ecfff">indigenomics-ai/ <span style="color:#555">← sibling dir</span></div>
+        <div style="margin-left:32px;color:#5dade2">data-platform.md <span style="color:#555">stage: active (in YAML)</span></div>
+        <div style="margin-left:32px;color:#5dade2">governance-model.md <span style="color:#555">stage: planned</span></div>
+        <div style="margin-left:32px;color:#5dade2">data-platform/ <span style="color:#555">← project's child dir</span></div>
+        <div style="margin-left:48px;color:#52be80">schema-design.md</div>
+        <div style="margin-left:48px;color:#52be80">api-layer.md</div>
+        <div style="color:#aaa;margin-top:6px;font-size:11px">Venture moves stage → only .md moves. Children stay put via parent_id.</div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Human-readable filesystem structure</li><li>Children co-located with parent</li><li>Intuitive when browsing manually</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Children <em>appear</em> abandoned when venture changes stage (dir stays behind)</li><li>Slightly more complex store</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid — projects first-class, milestones embedded</h3>
+      <p>Promote only Projects to first-class files (separate directory). Keep Milestones embedded in project YAML. This is a half-step upgrade — meaningful Projects get full lifecycle, Milestones stay lightweight and fast to create.</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.8">
+        <div style="color:#7ecfff">~/.claude/local/ventures/active/indigenomics-ai.md</div>
+        <div style="color:#5dade2">~/.claude/local/projects/data-platform.md</div>
+        <div style="background:#1a1a2e;border-radius:4px;padding:8px;margin:4px 0">
+          <div style="color:#f7c948">milestones: <span style="color:#555">← still embedded YAML</span></div>
+          <div style="color:#aaa;margin-left:16px">- id: ms-schema</div>
+          <div style="color:#aaa;margin-left:24px">title: Schema Design</div>
+          <div style="color:#aaa;margin-left:24px">status: complete</div>
+          <div style="color:#aaa;margin-left:24px">completion_criteria: [...]</div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Simpler than full fractal</li><li>Milestones are lightweight — quick to add</li><li>Minimal migration effort</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Not truly fractal — milestones don't get own lifecycle</li><li>Project files grow large with many milestones</li><li>Can't query milestones independently</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:#1a1a2e;border-radius:8px;padding:16px;border:1px solid #5dade2">
+  <h3 style="color:#5dade2;margin-bottom:8px">My recommendation: B (parent-grouped)</h3>
+  <p style="color:#aaa;font-size:14px">Option A is technically cleaner but loses the filesystem legibility that makes markdown-based tools valuable — the whole point is that you can browse and edit files directly. Option B gives you human-readable structure AND avoids the stage-subdir problem by keeping child entities' stages in YAML only. The "orphaned directory" when a venture changes stage is solved by the parent_id: when querying, the store ignores directory location and resolves children by ID.</p>
+</div>

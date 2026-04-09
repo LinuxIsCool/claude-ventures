@@ -1,0 +1,81 @@
+<h2>Current Structure vs Fractal Proposal</h2>
+<p class="subtitle">Understanding what changes — and what stays the same</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Current: Flat Nesting</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8">
+      <div style="color:#7ecfff;font-weight:bold">~/.claude/local/ventures/active/</div>
+      <div style="margin-left:16px;color:#aaa">indigenomics-ai.md</div>
+      <div style="margin-left:16px;color:#aaa">salish-sea-dreaming.md</div>
+      <div style="margin-left:16px;color:#aaa">protocol-politicians.md</div>
+      <div style="height:12px"></div>
+      <div style="color:#999;font-size:11px">Inside indigenomics-ai.md:</div>
+      <div style="background:#1a1a2e;border-radius:6px;padding:10px;margin-top:6px;border:1px solid #333">
+        <div style="color:#f7c948">milestones:</div>
+        <div style="margin-left:16px;color:#aaa">- id: ms-abc</div>
+        <div style="margin-left:24px;color:#aaa">title: Phase 1 Data</div>
+        <div style="margin-left:24px;color:#aaa">deliverables:</div>
+        <div style="margin-left:32px;color:#888">- id: del-xyz</div>
+        <div style="margin-left:40px;color:#888">title: Schema design</div>
+      </div>
+      <div style="margin-top:12px;color:#e05c5c;font-size:12px">
+        ⚠ Milestones = embedded YAML arrays<br>
+        ⚠ No separate files<br>
+        ⚠ No independent lifecycle<br>
+        ⚠ No priority score per milestone<br>
+        ⚠ Venture file grows unbounded
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Proposed: Fractal Hierarchy</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8">
+      <div style="color:#7ecfff;font-weight:bold">~/.claude/local/ventures/</div>
+      <div style="margin-left:16px;color:#7ecfff">active/</div>
+      <div style="margin-left:32px;color:#aaa">indigenomics-ai.md</div>
+      <div style="margin-left:32px;color:#5dade2">indigenomics-ai/</div>
+      <div style="margin-left:48px;color:#5dade2">projects/</div>
+      <div style="margin-left:64px;color:#aaa">active/</div>
+      <div style="margin-left:80px;color:#ccc">data-platform.md</div>
+      <div style="margin-left:80px;color:#ccc">data-platform/</div>
+      <div style="margin-left:96px;color:#ccc">milestones/</div>
+      <div style="margin-left:112px;color:#888">schema-design.md</div>
+      <div style="margin-left:112px;color:#888">api-layer.md</div>
+      <div style="height:12px"></div>
+      <div style="background:#1a1a2e;border-radius:6px;padding:10px;border:1px solid #333">
+        <div style="color:#f7c948">Each level has:</div>
+        <div style="margin-left:8px;color:#aaa">• Own markdown file</div>
+        <div style="margin-left:8px;color:#aaa">• Own stage (seed→harvesting)</div>
+        <div style="margin-left:8px;color:#aaa">• Own priority score</div>
+        <div style="margin-left:8px;color:#aaa">• Own co-venturers / team</div>
+        <div style="margin-left:8px;color:#aaa">• Own deadlines</div>
+      </div>
+      <div style="margin-top:12px;color:#52be80;font-size:12px">
+        ✓ Each level is independently queryable<br>
+        ✓ Venture view = aggregated from projects<br>
+        ✓ Project view = aggregated from milestones<br>
+        ✓ No data duplication — views are computed
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>The Core Principle: Each Level Is Identical in Shape</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">
+    <div style="background:#1a1a2e;border-radius:8px;padding:16px;border:2px solid #7ecfff">
+      <div style="color:#7ecfff;font-weight:bold;margin-bottom:8px">🚀 Venture</div>
+      <div style="color:#aaa;font-size:13px">Strategic scope<br>Months–years<br>Has co-venturers<br>Has financials<br>Contains → Projects</div>
+    </div>
+    <div style="background:#1a1a2e;border-radius:8px;padding:16px;border:2px solid #5dade2">
+      <div style="color:#5dade2;font-weight:bold;margin-bottom:8px">📁 Project</div>
+      <div style="color:#aaa;font-size:13px">Delivery scope<br>Weeks–months<br>Has team members<br>Has budget<br>Contains → Milestones</div>
+    </div>
+    <div style="background:#1a1a2e;border-radius:8px;padding:16px;border:2px solid #52be80">
+      <div style="color:#52be80;font-weight:bold;margin-bottom:8px">🎯 Milestone</div>
+      <div style="color:#aaa;font-size:13px">Execution scope<br>Days–weeks<br>Has owner<br>Has deliverables<br>Contains → Tasks</div>
+    </div>
+  </div>
+</div>

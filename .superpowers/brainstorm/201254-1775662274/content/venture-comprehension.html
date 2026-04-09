@@ -1,0 +1,75 @@
+<h2>How Does a Venture "Know" Its Children?</h2>
+<p class="subtitle">Three approaches — pick one</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Filesystem as truth — computed view</h3>
+      <p>The venture <code>.md</code> file contains only <em>venture-level data</em>. Projects live in a sibling directory <code>indigenomics-ai/projects/</code>. The MCP server assembles the full picture by scanning the directory tree at query time — no project data is stored in the venture file itself.</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.7">
+        <div style="color:#f7c948">indigenomics-ai.md</div>
+        <div style="color:#aaa">&nbsp;&nbsp;stage: active</div>
+        <div style="color:#aaa">&nbsp;&nbsp;priority: high</div>
+        <div style="color:#aaa">&nbsp;&nbsp;co_venturers: [...]</div>
+        <div style="color:#aaa">&nbsp;&nbsp;financial: {...}</div>
+        <div style="color:#888;font-style:italic">&nbsp;&nbsp;# no projects: key</div>
+        <div style="color:#5dade2;margin-top:6px">indigenomics-ai/projects/active/</div>
+        <div style="color:#888">&nbsp;&nbsp;data-platform.md ← discovered by scan</div>
+        <div style="color:#888">&nbsp;&nbsp;governance.md ← discovered by scan</div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero redundancy</li><li>Children can be created independently</li><li>File stays small forever</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Venture view requires directory scan</li><li>Slightly slower reads</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Cached rollup in frontmatter</h3>
+      <p>The venture <code>.md</code> file contains venture-level data <em>plus</em> a cached summary of its projects (title, stage, completion%). Projects still live in their own files — but the venture caches a lightweight digest that's updated whenever a child changes.</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.7">
+        <div style="color:#f7c948">indigenomics-ai.md</div>
+        <div style="color:#aaa">&nbsp;&nbsp;stage: active</div>
+        <div style="color:#f7c948">&nbsp;&nbsp;projects_summary:</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;- id: prj-abc</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;title: Data Platform</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stage: active</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;completion: 40%</div>
+        <div style="color:#888;font-style:italic">&nbsp;&nbsp;&nbsp;&nbsp;# refreshed on write</div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fast venture reads</li><li>Human-readable summary in file</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Redundant data → stale cache risk</li><li>Writes touch venture file on every project update</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid — file is index, view is computed</h3>
+      <p>The venture <code>.md</code> file stores venture-level metadata plus a flat list of project IDs. Full project data lives in child files and is resolved at query time. The venture file is a <em>stable index</em>, not a cache — IDs don't go stale.</p>
+      <div style="background:#111;border-radius:6px;padding:10px;margin-top:10px;font-family:monospace;font-size:12px;line-height:1.7">
+        <div style="color:#f7c948">indigenomics-ai.md</div>
+        <div style="color:#aaa">&nbsp;&nbsp;stage: active</div>
+        <div style="color:#aaa">&nbsp;&nbsp;priority: high</div>
+        <div style="color:#f7c948">&nbsp;&nbsp;projects:</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;- prj-abc123 &nbsp;# just IDs</div>
+        <div style="color:#aaa">&nbsp;&nbsp;&nbsp;&nbsp;- prj-def456</div>
+        <div style="color:#888;font-style:italic">&nbsp;&nbsp;# full data lives in child files</div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>No stale cache</li><li>Explicit ownership relationship</li><li>Easy to reattach orphaned projects</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Must maintain ID list on create/delete</li><li>Minor sync overhead</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;background:#1a1a2e;border-radius:8px;padding:16px;border:1px solid #444">
+  <h3 style="margin-bottom:8px">My recommendation: Option A</h3>
+  <p style="color:#aaa;font-size:14px">The filesystem already encodes the parent-child relationship via the directory structure. Scanning a directory is cheap (these are small text files). You get zero redundancy and zero sync bugs. The MCP server already scans stage directories to find ventures — extending this to scan <code>projects/</code> subdirectories is the same pattern. The venture file stays clean.</p>
+</div>
