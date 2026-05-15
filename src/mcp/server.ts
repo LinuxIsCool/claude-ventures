@@ -19,6 +19,12 @@ import { calculatePriority, createDefaultContext, getUrgentVentures } from "../p
 import type { CreateVentureInput, UpdateVentureInput, VentureQuery, VentureFilter } from "../types";
 import { localDateStr } from "../utils/dates";
 
+import { ProjectStore } from "../store/project";
+import { MilestoneStore } from "../store/milestone";
+import { makeProjectTools } from "./tools/project-tools";
+import { makeMilestoneTools } from "./tools/milestone-tools";
+import { makeTreeTools } from "./tools/tree-tools";
+
 import {
   ventureCreateSchema,
   ventureListSchema,
@@ -36,6 +42,18 @@ import {
   ventureTimelineSchema,
   venturePortfolioSchema,
   ventureInitSchema,
+  PROJECT_CREATE_SCHEMA,
+  PROJECT_LIST_SCHEMA,
+  PROJECT_GET_SCHEMA,
+  PROJECT_UPDATE_SCHEMA,
+  PROJECT_CLOSE_SCHEMA,
+  MILESTONE_CREATE_SCHEMA,
+  MILESTONE_LIST_SCHEMA,
+  MILESTONE_GET_SCHEMA,
+  MILESTONE_UPDATE_SCHEMA,
+  MILESTONE_CLOSE_SCHEMA,
+  VENTURE_TREE_SCHEMA,
+  VENTURE_CO_LINKS_SCHEMA,
 } from "./tools/schemas";
 
 // =============================================================================
@@ -65,6 +83,13 @@ async function main() {
   );
 
   const initialized = isInitialized();
+
+  // Fractal V/P/M wiring (task-416 Phase 1)
+  const projectStore = new ProjectStore({ ventures_root: paths.base });
+  const milestoneStore = new MilestoneStore({ ventures_root: paths.base });
+  const projectTools = makeProjectTools(projectStore);
+  const milestoneTools = makeMilestoneTools(milestoneStore);
+  const treeTools = makeTreeTools({ ventures_root: paths.base });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools: Tool[] = [];
@@ -152,6 +177,66 @@ async function main() {
         name: "venture_portfolio",
         description: "Get a portfolio-level dashboard: active ventures, approaching deadlines, dormant ventures with strategic connections, portfolio health.",
         inputSchema: venturePortfolioSchema,
+      },
+      {
+        name: "project_create",
+        description: "Create a new Project under a Venture",
+        inputSchema: PROJECT_CREATE_SCHEMA,
+      },
+      {
+        name: "project_list",
+        description: "List Projects, optionally filtered by venture/stage/owner/deadline",
+        inputSchema: PROJECT_LIST_SCHEMA,
+      },
+      {
+        name: "project_get",
+        description: "Get a Project by venture+slug",
+        inputSchema: PROJECT_GET_SCHEMA,
+      },
+      {
+        name: "project_update",
+        description: "Update a Project (merge patch)",
+        inputSchema: PROJECT_UPDATE_SCHEMA,
+      },
+      {
+        name: "project_close",
+        description: "Close a Project — transition stage to sustaining/dormant/harvesting",
+        inputSchema: PROJECT_CLOSE_SCHEMA,
+      },
+      {
+        name: "milestone_create",
+        description: "Create a new Milestone under a Project",
+        inputSchema: MILESTONE_CREATE_SCHEMA,
+      },
+      {
+        name: "milestone_list",
+        description: "List Milestones, optionally filtered by venture/project/stage/deadline",
+        inputSchema: MILESTONE_LIST_SCHEMA,
+      },
+      {
+        name: "milestone_get",
+        description: "Get a Milestone by venture+project+slug",
+        inputSchema: MILESTONE_GET_SCHEMA,
+      },
+      {
+        name: "milestone_update",
+        description: "Update a Milestone (merge patch)",
+        inputSchema: MILESTONE_UPDATE_SCHEMA,
+      },
+      {
+        name: "milestone_close",
+        description: "Close a Milestone — transition stage to sustaining/dormant/harvesting",
+        inputSchema: MILESTONE_CLOSE_SCHEMA,
+      },
+      {
+        name: "venture_tree",
+        description: "Return the full V→P→M nested tree for a venture",
+        inputSchema: VENTURE_TREE_SCHEMA,
+      },
+      {
+        name: "venture_co_links",
+        description: "Return co_ventures + parent_ventures + child_ventures for a venture",
+        inputSchema: VENTURE_CO_LINKS_SCHEMA,
       }
     );
 
@@ -612,6 +697,56 @@ async function main() {
           }
 
           return textResponse(sections.join("\n\n"));
+        }
+
+        // ── Fractal V/P/M tools (task-416 Phase 1) ──────────────────
+        case "project_create": {
+          const value = await projectTools.project_create(args as any);
+          return jsonResponse(value);
+        }
+        case "project_list": {
+          const value = await projectTools.project_list(args as any);
+          return jsonResponse(value);
+        }
+        case "project_get": {
+          const value = await projectTools.project_get(args as any);
+          return jsonResponse(value);
+        }
+        case "project_update": {
+          const value = await projectTools.project_update(args as any);
+          return jsonResponse(value);
+        }
+        case "project_close": {
+          const value = await projectTools.project_close(args as any);
+          return jsonResponse(value);
+        }
+        case "milestone_create": {
+          const value = await milestoneTools.milestone_create(args as any);
+          return jsonResponse(value);
+        }
+        case "milestone_list": {
+          const value = await milestoneTools.milestone_list(args as any);
+          return jsonResponse(value);
+        }
+        case "milestone_get": {
+          const value = await milestoneTools.milestone_get(args as any);
+          return jsonResponse(value);
+        }
+        case "milestone_update": {
+          const value = await milestoneTools.milestone_update(args as any);
+          return jsonResponse(value);
+        }
+        case "milestone_close": {
+          const value = await milestoneTools.milestone_close(args as any);
+          return jsonResponse(value);
+        }
+        case "venture_tree": {
+          const value = await treeTools.venture_tree(args as any);
+          return jsonResponse(value);
+        }
+        case "venture_co_links": {
+          const value = await treeTools.venture_co_links(args as any);
+          return jsonResponse(value);
         }
 
         default:

@@ -153,7 +153,12 @@ export interface Deliverable {
   completed_at?: string;
 }
 
-export interface Milestone {
+/**
+ * @deprecated Use MilestoneV2 from "./milestone-v2" for the fractal hierarchy.
+ * This embedded type stays for backward compatibility with existing venture .md files
+ * that still inline milestones in their frontmatter (pre-task-416 layout).
+ */
+export interface LegacyEmbeddedMilestone {
   id: string;
   title: string;
   description?: string;
@@ -163,6 +168,12 @@ export interface Milestone {
   completed: boolean;
   completed_at?: string;
 }
+
+/**
+ * Back-compat alias — existing imports `import { Milestone }` keep working
+ * during migration. New code should use MilestoneV2 from "./milestone-v2".
+ */
+export type Milestone = LegacyEmbeddedMilestone;
 
 // =============================================================================
 // Data Path Types (Layer 3 references)
@@ -225,6 +236,14 @@ export interface Venture {
   milestones: Milestone[];
 
   co_venturers: CoVenturer[];
+
+  // ── Fractal hierarchy additions (task-416 Phase 1) ──────────────
+  co_ventures?: string[];           // peer-symmetric venture slugs
+  parent_ventures?: string[];       // asymmetric — co-owned BY others
+  child_ventures?: string[];        // auto-derived back-refs (CoVentureMirror)
+  projects?: string[];              // list of project slugs (children in V/P/M tree)
+  stakeholders?: string[];          // FK to people
+  personas?: string[];              // FK to personas
 
   financial?: FinancialTracking;
 
@@ -385,3 +404,7 @@ export const DEFAULT_CONFIG: VenturesConfig = {
   default_currency: "CAD",
   data_drive_path: "/mnt/data-24tb/10-19_Projects",
 };
+
+// Fractal hierarchy types (task-416 Phase 1)
+export * from "./project";
+export * from "./milestone-v2";
