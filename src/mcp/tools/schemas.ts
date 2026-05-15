@@ -355,3 +355,153 @@ export const ventureInitSchema = {
     },
   },
 };
+
+// ── Fractal V/P/M schemas (task-416 Phase 1) ──────────────────────────
+
+const SLUG_SEGMENT = { type: "string", pattern: "^[a-z0-9][a-z0-9-]*$" };
+const STAGE = {
+  type: "string",
+  enum: ["seed", "exploring", "active", "sustaining", "dormant", "harvesting"],
+};
+const PRIORITY = {
+  type: "string",
+  enum: ["critical", "high", "medium", "low", "none"],
+};
+const CLOSE_STAGE = {
+  type: "string",
+  enum: ["sustaining", "dormant", "harvesting"],
+};
+
+export const PROJECT_CREATE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    slug: SLUG_SEGMENT,
+    name: { type: "string" },
+    description: { type: "string" },
+    venture: SLUG_SEGMENT,
+    stage: STAGE,
+    priority: PRIORITY,
+    owner: { type: "string" },
+    co_owners: { type: "array", items: { type: "string" } },
+    stakeholders: { type: "array", items: { type: "string" } },
+    deadline: { type: "string", format: "date" },
+    milestones: { type: "array", items: SLUG_SEGMENT },
+    notes: { type: "string" },
+  },
+  required: ["slug", "name", "venture", "stage", "priority", "owner", "co_owners", "stakeholders", "milestones"],
+};
+
+export const PROJECT_LIST_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    stage: { oneOf: [STAGE, { type: "array", items: STAGE }] },
+    priority: { oneOf: [PRIORITY, { type: "array", items: PRIORITY }] },
+    owner: { type: "string" },
+    due_within_days: { type: "number" },
+    overdue: { type: "boolean" },
+    sort_by: { type: "string", enum: ["priority", "deadline", "created", "updated", "name"] },
+    sort_order: { type: "string", enum: ["asc", "desc"] },
+    limit: { type: "number" },
+    offset: { type: "number" },
+  },
+};
+
+export const PROJECT_GET_SCHEMA = {
+  type: "object" as const,
+  properties: { venture: SLUG_SEGMENT, slug: SLUG_SEGMENT },
+  required: ["venture", "slug"],
+};
+
+export const PROJECT_UPDATE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    slug: SLUG_SEGMENT,
+    patch: { type: "object" },
+  },
+  required: ["venture", "slug", "patch"],
+};
+
+export const PROJECT_CLOSE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    slug: SLUG_SEGMENT,
+    stage: CLOSE_STAGE,
+    retro_md: { type: "string" },
+  },
+  required: ["venture", "slug", "stage"],
+};
+
+export const MILESTONE_CREATE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    slug: SLUG_SEGMENT,
+    name: { type: "string" },
+    description: { type: "string" },
+    project: SLUG_SEGMENT,
+    venture: SLUG_SEGMENT,
+    stage: STAGE,
+    priority: PRIORITY,
+    target: { type: "string" },
+    deadline: { type: "string", format: "date" },
+    exit_criteria: { type: "array", items: { type: "string" } },
+    tasks: { type: "array", items: { type: "number" } },
+    notes: { type: "string" },
+  },
+  required: ["slug", "name", "project", "venture", "stage", "priority", "target", "exit_criteria", "tasks"],
+};
+
+export const MILESTONE_LIST_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    project: SLUG_SEGMENT,
+    stage: { oneOf: [STAGE, { type: "array", items: STAGE }] },
+    priority: { oneOf: [PRIORITY, { type: "array", items: PRIORITY }] },
+    due_within_days: { type: "number" },
+    overdue: { type: "boolean" },
+    sort_by: { type: "string", enum: ["priority", "deadline", "created", "updated", "name"] },
+    sort_order: { type: "string", enum: ["asc", "desc"] },
+    limit: { type: "number" },
+    offset: { type: "number" },
+  },
+};
+
+export const MILESTONE_GET_SCHEMA = {
+  type: "object" as const,
+  properties: { venture: SLUG_SEGMENT, project: SLUG_SEGMENT, slug: SLUG_SEGMENT },
+  required: ["venture", "project", "slug"],
+};
+
+export const MILESTONE_UPDATE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT, project: SLUG_SEGMENT, slug: SLUG_SEGMENT,
+    patch: { type: "object" },
+  },
+  required: ["venture", "project", "slug", "patch"],
+};
+
+export const MILESTONE_CLOSE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT, project: SLUG_SEGMENT, slug: SLUG_SEGMENT,
+    stage: CLOSE_STAGE,
+    retro_md: { type: "string" },
+  },
+  required: ["venture", "project", "slug", "stage"],
+};
+
+export const VENTURE_TREE_SCHEMA = {
+  type: "object" as const,
+  properties: { slug: SLUG_SEGMENT },
+  required: ["slug"],
+};
+
+export const VENTURE_CO_LINKS_SCHEMA = {
+  type: "object" as const,
+  properties: { slug: SLUG_SEGMENT },
+  required: ["slug"],
+};
