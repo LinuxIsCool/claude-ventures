@@ -5,21 +5,22 @@
 
 import type { PriorityLevelValue, VentureStageValue } from "./index";
 
-export const PROJECT_STAGES_ORDERED: VentureStageValue[] = [
-  "seed",
-  "exploring",
-  "active",
-  "sustaining",
-  "dormant",
-  "harvesting",
-];
+/**
+ * Project lifecycle states. Currently identical to VentureStageValue per
+ * Phase 0 spec (Shawn override of false-fractal warning, 2026-05-14).
+ * If projects ever diverge to a different state set, change this alias to a
+ * project-local literal union without touching consumer code.
+ */
+export type ProjectStageValue = VentureStageValue;
+
+export { VENTURE_STAGES_ORDERED as PROJECT_STAGES_ORDERED } from "./index";
 
 export interface Project {
   slug: string;                    // local slug ("tbff"), unique within venture
   name: string;
   description?: string;
   venture: string;                 // FK — venture slug
-  stage: VentureStageValue;        // 6-state, same as venture
+  stage: ProjectStageValue;        // 6-state, same as venture
   priority: PriorityLevelValue;
   owner: string;                   // single primary owner (FK to people)
   co_owners: string[];             // additional owners
@@ -44,7 +45,7 @@ export type UpdateProjectInput = Partial<
 
 export interface ProjectFilter {
   venture?: string;                // single venture or undefined for all
-  stage?: VentureStageValue | VentureStageValue[];
+  stage?: ProjectStageValue | ProjectStageValue[];
   priority?: PriorityLevelValue | PriorityLevelValue[];
   owner?: string;
   due_within_days?: number;
