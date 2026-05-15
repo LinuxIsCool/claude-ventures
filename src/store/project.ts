@@ -101,9 +101,12 @@ export class ProjectStore {
     for (const v of ventureSlugs) {
       const projectsDir = join(this.opts.ventures_root, v, "projects");
       if (!existsSync(projectsDir)) continue;
-      const entries = await readdir(projectsDir);
-      for (const slug of entries) {
-        const p = await this.get(v, slug);
+      const entries = await readdir(projectsDir, { withFileTypes: true });
+      const slugs = entries
+        .filter((e) => e.isDirectory() && isValidSlugSegment(e.name))
+        .map((e) => e.name);
+      const loaded = await Promise.all(slugs.map((slug) => this.get(v, slug)));
+      for (const p of loaded) {
         if (p && this.matches(p, filter)) projects.push(p);
       }
     }
