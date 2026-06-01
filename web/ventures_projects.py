@@ -43,7 +43,12 @@ def _parse(md: Path) -> dict[str, Any]:
 
 
 def get(slug: str, ventures_root: Path | None = None) -> dict[str, Any] | None:
-    f = _projects_dir(ventures_root) / f"{slug}.md"
+    if not slug or "/" in slug or "\\" in slug or slug.startswith(".") or ".." in slug:
+        return None
+    base = _projects_dir(ventures_root).resolve()
+    f = (base / f"{slug}.md").resolve()
+    if base not in f.parents:
+        return None
     return _parse(f) if f.is_file() else None
 
 

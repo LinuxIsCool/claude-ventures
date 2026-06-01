@@ -29,12 +29,12 @@ def _frontmatter(text: str) -> dict[str, Any]:
 
 def _matches(fm: dict, venture: str, project: str | None, milestone: str | None) -> bool:
     pid = str(fm.get("parent_id") or "")
+    segs = pid.split(".") if pid else []
     if milestone:
-        return bool(pid) and (pid.endswith("." + milestone) or pid.split(".")[-1] == milestone)
+        return len(segs) >= 1 and segs[0] == venture and segs[-1] == milestone
     if project:
-        segs = pid.split(".")
         return len(segs) >= 2 and segs[0] == venture and segs[1] == project
-    if pid and pid.split(".")[0] == venture:
+    if segs and segs[0] == venture:
         return True
     return str(fm.get("venture") or "").strip() == venture
 
