@@ -4,6 +4,10 @@
 Tasks link via the `venture:` frontmatter field (live today) OR the composite
 `parent_id` ("venture.project.milestone", parent_type set) when present.
 Read-through to ~/.claude/local/backlog/*.md. No DB.
+
+Performance: parsed results are cached in-memory per directory, invalidated by
+mtime-signature (tuple of (filename, mtime_ns) pairs).  Steady-state cost is
+O(n) signature scan instead of O(n) YAML parse.
 """
 from __future__ import annotations
 import re
@@ -16,6 +20,9 @@ _BACKLOG_DEFAULT = Path.home() / ".claude" / "local" / "backlog"
 _PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _ID_RE = re.compile(r"(?:task-)?(\d+)")
 
+# module-level cache, keyed by resolved backlog dir
+_CACHE: dict[str, dict[str, Any]] = {}
+
 
 def _frontmatter(text: str) -> dict[str, Any]:
     if not text.startswith("---"):
@@ -27,23 +34,11 @@ def _frontmatter(text: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _matches(fm: dict, venture: str, project: str | None, milestone: str | None) -> bool:
-    pid = str(fm.get("parent_id") or "")
-    segs = pid.split(".") if pid else []
-    if milestone:
-        return len(segs) >= 1 and segs[0] == venture and segs[-1] == milestone
-    if project:
-        return len(segs) >= 2 and segs[0] == venture and segs[1] == project
-    if segs and segs[0] == venture:
-        return True
-    return str(fm.get("venture") or "").strip() == venture
+def _signature(d: Path) -> tuple:
+    return tuple(sorted((p.name, p.stat().st_mtime_ns) for p in d.glob("*.md")))
 
 
-def tasks_for(venture: str, project: str | None = None, milestone: str | None = None,
-              backlog_dir: Path | None = None) -> list[dict[str, Any]]:
-    d = Path(backlog_dir) if backlog_dir else _BACKLOG_DEFAULT
-    if not d.is_dir():
-        return []
+def _all_tasks(d: Path) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for md in sorted(d.glob("*.md")):
         try:
@@ -51,7 +46,7 @@ def tasks_for(venture: str, project: str | None = None, milestone: str | None = 
         except Exception as exc:  # noqa: BLE001
             print(f"[ventures-web] skip backlog {md}: {exc}", file=sys.stderr)
             continue
-        if not fm or not _matches(fm, venture, project, milestone):
+        if not fm:
             continue
         m = _ID_RE.search(str(fm.get("id") or md.stem))
         out.append({
@@ -61,6 +56,38 @@ def tasks_for(venture: str, project: str | None = None, milestone: str | None = 
             "priority": str(fm.get("priority", "medium")),
             "venture": fm.get("venture"),
             "due": str(fm.get("due") or ""),
+            "_parent_id": str(fm.get("parent_id") or ""),
         })
-    out.sort(key=lambda t: (_PRIORITY_RANK.get(t["priority"], 9), t["due"] or "9999"))
     return out
+
+
+def _cached_tasks(d: Path) -> list[dict[str, Any]]:
+    key = str(d.resolve())
+    sig = _signature(d)
+    entry = _CACHE.get(key)
+    if entry is None or entry["sig"] != sig:
+        _CACHE[key] = {"sig": sig, "tasks": _all_tasks(d)}
+    return _CACHE[key]["tasks"]
+
+
+def _matches(t: dict, venture: str, project: str | None, milestone: str | None) -> bool:
+    pid = t["_parent_id"]
+    segs = pid.split(".") if pid else []
+    if milestone:
+        return len(segs) >= 1 and segs[0] == venture and segs[-1] == milestone
+    if project:
+        return len(segs) >= 2 and segs[0] == venture and segs[1] == project
+    if segs and segs[0] == venture:
+        return True
+    return str(t.get("venture") or "").strip() == venture
+
+
+def tasks_for(venture: str, project: str | None = None, milestone: str | None = None,
+              backlog_dir: Path | None = None) -> list[dict[str, Any]]:
+    d = Path(backlog_dir) if backlog_dir else _BACKLOG_DEFAULT
+    if not d.is_dir():
+        return []
+    matched = [t for t in _cached_tasks(d) if _matches(t, venture, project, milestone)]
+    matched.sort(key=lambda t: (_PRIORITY_RANK.get(t["priority"], 9), t["due"] or "9999"))
+    # strip internal keys from the returned summaries
+    return [{k: v for k, v in t.items() if not k.startswith("_")} for t in matched]

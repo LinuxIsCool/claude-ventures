@@ -155,3 +155,22 @@ def test_milestone_join_requires_matching_venture(tmp_path: Path):
     (d / "b.md").write_text("---\nid: 11\ntitle: Theirs\nstatus: To Do\npriority: high\nparent_id: regenai.proj.ms1\nparent_type: milestone\n---\n")
     tasks = ventures_backlog.tasks_for("bcrg", milestone="ms1", backlog_dir=d)
     assert [t["title"] for t in tasks] == ["Mine"]  # NOT "Theirs"
+
+
+def test_backlog_cache_invalidates_on_change(tmp_path: Path):
+    d = tmp_path / "backlog"; d.mkdir()
+    (d / "t1.md").write_text("---\nid: 1\ntitle: A\nstatus: To Do\npriority: high\nventure: bcrg\n---\n")
+    r1 = ventures_backlog.tasks_for("bcrg", backlog_dir=d)
+    assert [t["title"] for t in r1] == ["A"]
+    # add a file -> cache must invalidate and pick it up
+    (d / "t2.md").write_text("---\nid: 2\ntitle: B\nstatus: To Do\npriority: critical\nventure: bcrg\n---\n")
+    r2 = ventures_backlog.tasks_for("bcrg", backlog_dir=d)
+    assert [t["title"] for t in r2] == ["B", "A"]  # critical sorts first
+
+
+def test_backlog_cache_no_parent_id_leak(tmp_path: Path):
+    # cached entries must NOT expose internal _parent_id in returned summaries
+    d = tmp_path / "backlog"; d.mkdir()
+    (d / "t.md").write_text("---\nid: 9\ntitle: X\nstatus: To Do\npriority: low\nparent_id: bcrg.p.m\nparent_type: milestone\n---\n")
+    out = ventures_backlog.tasks_for("bcrg", backlog_dir=d)
+    assert out and all(not k.startswith("_") for k in out[0].keys())
