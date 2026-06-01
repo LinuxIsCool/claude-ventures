@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>claude-ventures — Legion portfolio</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="static/legion-ui.css" />
+</head>
+<body class="bg-base text-text font-mono">
+  <header class="flex items-center gap-4 p-3 border-b border-overlay">
+    <h1 class="font-pixel text-mauve text-sm">claude-ventures</h1>
+    <input id="search" class="input flex-1" placeholder="filter ventures…" />
+    <span id="healthz-slot" class="badge"></span>
+  </header>
+
+  <div id="overdue-banner" class="hidden bg-red/20 border border-red text-red px-3 py-2"></div>
+
+  <div class="flex">
+    <aside id="lifecycle-nav" class="w-48 p-3 border-r border-overlay"></aside>
+    <main id="grid" class="flex-1 p-3 grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></main>
+    <section id="detail" class="w-96 p-3 border-l border-overlay hidden"></section>
+  </div>
+
+  <script src="static/embedded-bar.js"></script>
+  <script>
+    const state = { lifecycle: "all", q: "" };
+    async function api(path) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(path + " " + r.status);
+      return r.json();
+    }
+    function lifecycleColor(lc) {
+      return { active:"text-green", exploring:"text-blue",
+               dormant:"text-subtext", harvesting:"text-yellow" }[lc] || "text-text";
+    }
+    async function renderStats() {
+      const s = await api("api/stats");
+      document.getElementById("healthz-slot").textContent =
+        `${s.key_metric} active · ${s.overdue_total} overdue`;
+      const nav = document.getElementById("lifecycle-nav");
+      nav.innerHTML = `<div class="nav-link" data-lc="all">All</div>` +
+        Object.entries(s.by_lifecycle).map(([lc,n]) =>
+          `<div class="nav-link ${lifecycleColor(lc)}" data-lc="${lc}">${lc} (${n})</div>`).join("");
+      nav.querySelectorAll("[data-lc]").forEach(el =>
+        el.onclick = () => { state.lifecycle = el.dataset.lc; renderGrid(); });
+      const banner = document.getElementById("overdue-banner");
+      if (s.overdue_total) {
+        banner.classList.remove("hidden");
+        banner.innerHTML = `<b>${s.overdue_total} overdue milestones.</b> ` +
+          s.overdue_milestones.slice(0,5).map(m =>
+            `${m.venture}: ${m.label} (${m.days_overdue}d)`).join(" · ");
+      } else { banner.classList.add("hidden"); }
+    }
+    async function renderGrid() {
+      let items = await api("api/list");
+      if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
+      if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
+      document.getElementById("grid").innerHTML = items.map(i => `
+        <div class="ui-card cursor-pointer" data-slug="${i.slug}">
+          <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${i.title}</div>
+          <div class="text-subtext text-xs mt-1">${i.stage} · ${i.priority}</div>
+          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${i.overdue_count} overdue</div>` : ""}
+        </div>`).join("");
+      document.querySelectorAll("[data-slug]").forEach(el =>
+        el.onclick = () => renderDetail(el.dataset.slug));
+    }
+    async function renderDetail(slug) {
+      const v = await api("api/detail/" + encodeURIComponent(slug));
+      const d = document.getElementById("detail");
+      d.classList.remove("hidden");
+      d.innerHTML = `
+        <h2 class="font-pixel text-mauve text-xs">${v.title}</h2>
+        <p class="text-subtext text-xs mt-2">${v.description||""}</p>
+        <h3 class="mt-3 text-xs">Co-venturers</h3>
+        ${(v.co_venturers||[]).map(c=>`<span class="badge">${c.name} — ${c.role||""}</span>`).join(" ")}
+        <h3 class="mt-3 text-xs">Deadlines</h3>
+        ${(v.deadlines||[]).map(m=>`<div class="text-xs">${m.date} — ${m.label}</div>`).join("")}`;
+    }
+    document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
+    renderStats(); renderGrid();
+  </script>
+</body>
+</html>
