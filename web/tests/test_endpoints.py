@@ -73,3 +73,16 @@ def test_detail_unknown_slug_returns_error(tmp_path: Path):
     acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
     rec = acc.detail("does-not-exist")
     assert rec == {"error": "not found", "slug": "does-not-exist"}
+
+
+def test_stats_rolls_up_counts_and_overdue(tmp_path: Path):
+    root = _make_store(tmp_path)
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    s = acc.stats()
+    assert s["key_metric"] == 1
+    assert s["key_metric_label"] == "active ventures"
+    assert s["by_lifecycle"] == {"active": 1, "exploring": 1, "dormant": 0, "harvesting": 0}
+    assert s["overdue_total"] == 1
+    assert s["overdue_milestones"][0]["venture"] == "alpha"
+    assert s["overdue_milestones"][0]["label"] == "Overdue milestone"
+    assert s["overdue_milestones"][0]["days_overdue"] == 61

@@ -101,3 +101,28 @@ class VenturesAccessor:
             if v and v["slug"] == item_id:
                 return {k: val for k, val in v.items() if not k.startswith("_")}
         return {"error": "not found", "slug": item_id}
+
+    def stats(self) -> dict[str, Any]:
+        by_lifecycle = {lc: 0 for lc in _LIFECYCLES}
+        overdue: list[dict[str, Any]] = []
+        for lifecycle, md in self._iter_files():
+            v = self._parse(lifecycle, md)
+            if v is None:
+                continue
+            by_lifecycle[lifecycle] += 1
+            for d in v["_overdue"]:
+                dt = datetime.strptime(str(d["date"]).strip(), "%Y-%m-%d").date()
+                overdue.append({
+                    "venture": v["slug"],
+                    "label": d.get("label", ""),
+                    "date": str(d["date"]).strip(),
+                    "days_overdue": (self._today - dt).days,
+                })
+        overdue.sort(key=lambda x: x["days_overdue"], reverse=True)
+        return {
+            "key_metric": by_lifecycle["active"],
+            "key_metric_label": "active ventures",
+            "by_lifecycle": by_lifecycle,
+            "overdue_total": len(overdue),
+            "overdue_milestones": overdue,
+        }
