@@ -26,7 +26,7 @@ NAMESPACE = "legion.claude-venture"
 
 _HOME = Path.home()
 _DATA_ROOT_DEFAULT = _HOME / ".claude" / "local" / "ventures"
-_LIFECYCLES = ("active", "exploring", "dormant", "harvesting")
+_LIFECYCLES = ("seed", "exploring", "active", "sustaining", "dormant", "harvesting")
 
 
 def _split_frontmatter(text: str) -> dict[str, Any]:
@@ -64,14 +64,20 @@ class VenturesAccessor:
             return None
         slug = str(fm.get("id") or md.stem)
         deadlines = fm.get("deadlines") or []
+        if not isinstance(deadlines, list):
+            deadlines = []
+        deadlines = [d for d in deadlines if isinstance(d, dict)]
         # Normalize deadline label: the documented schema uses `description`,
         # while several live files use `label`. Carry a single `label` key so
         # detail() + stats() render consistently regardless of which the
         # author used.
         for d in deadlines:
-            if isinstance(d, dict) and not d.get("label"):
+            if not d.get("label"):
                 d["label"] = d.get("description", "")
-        overdue = [d for d in deadlines if self._is_overdue(d)]
+        overdue = (
+            [] if lifecycle == "harvesting"
+            else [d for d in deadlines if self._is_overdue(d)]
+        )
         return {
             "slug": slug,
             "title": fm.get("title", slug),
@@ -86,6 +92,11 @@ class VenturesAccessor:
         }
 
     def _is_overdue(self, deadline: dict[str, Any]) -> bool:
+        status = str(deadline.get("status", "")).strip().lower()
+        if status in {"complete", "completed", "done"}:
+            return False
+        if "reached" in str(deadline.get("type", "")).strip().lower():
+            return False
         raw = str(deadline.get("date", "")).strip()
         try:
             d = datetime.strptime(raw, "%Y-%m-%d").date()

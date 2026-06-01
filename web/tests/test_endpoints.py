@@ -81,7 +81,7 @@ def test_stats_rolls_up_counts_and_overdue(tmp_path: Path):
     s = acc.stats()
     assert s["key_metric"] == 1
     assert s["key_metric_label"] == "active ventures"
-    assert s["by_lifecycle"] == {"active": 1, "exploring": 1, "dormant": 0, "harvesting": 0}
+    assert s["by_lifecycle"] == {"seed": 0, "exploring": 1, "active": 1, "sustaining": 0, "dormant": 0, "harvesting": 0}
     assert s["overdue_total"] == 1
     assert s["overdue_milestones"][0]["venture"] == "alpha"
     assert s["overdue_milestones"][0]["label"] == "Overdue milestone"
@@ -125,6 +125,44 @@ def test_build_kernel_serves_standard_routes(tmp_path: Path):
     assert resp.status == 200
     conn.request("POST", "/api/stats")
     assert conn.getresponse().status == 405
+
+
+def test_scalar_deadlines_does_not_crash(tmp_path: Path):
+    root = tmp_path / "ventures"
+    (root / "active").mkdir(parents=True)
+    (root / "active" / "weird.md").write_text(
+        "---\nid: weird\ntitle: Weird\nstage: active\ndeadlines: TBD\n---\n"
+    )
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    items = acc.list({})              # must not raise
+    assert len(items) == 1
+    assert items[0]["overdue_count"] == 0
+    assert acc.stats()["overdue_total"] == 0
+
+
+def test_completed_and_harvesting_excluded_from_overdue(tmp_path: Path):
+    root = tmp_path / "ventures"
+    (root / "active").mkdir(parents=True)
+    (root / "harvesting").mkdir(parents=True)
+    (root / "active" / "gamma.md").write_text(
+        "---\nid: gamma\ntitle: Gamma\nstage: active\n"
+        "deadlines:\n"
+        "  - date: \"2026-04-01\"\n    label: Done thing\n    status: complete\n"
+        "  - date: \"2026-04-02\"\n    label: Reached thing\n    type: milestone-reached\n"
+        "  - date: \"2026-04-03\"\n    label: Real obligation\n    type: hard\n"
+        "---\n"
+    )
+    (root / "harvesting" / "delta.md").write_text(
+        "---\nid: delta\ntitle: Delta\nstage: harvesting\n"
+        "deadlines:\n  - date: \"2026-01-01\"\n    label: Old harvest deadline\n---\n"
+    )
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    s = acc.stats()
+    # gamma: only the 'Real obligation' counts (completed + reached excluded)
+    # delta: harvesting -> excluded entirely
+    assert s["overdue_total"] == 1
+    labels = [m["label"] for m in s["overdue_milestones"]]
+    assert labels == ["Real obligation"]
 
 
 def test_count_parity_with_real_store():
