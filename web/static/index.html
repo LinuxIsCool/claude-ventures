@@ -25,6 +25,8 @@
   <script src="static/embedded-bar.js"></script>
   <script>
     const state = { lifecycle: "all", q: "" };
+    const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     async function api(path) {
       const r = await fetch(path);
       if (!r.ok) throw new Error(path + " " + r.status);
@@ -47,9 +49,9 @@
       const banner = document.getElementById("overdue-banner");
       if (s.overdue_total) {
         banner.classList.remove("hidden");
-        banner.innerHTML = `<b>${s.overdue_total} overdue milestones.</b> ` +
+        banner.innerHTML = `<b>${esc(s.overdue_total)} overdue milestones.</b> ` +
           s.overdue_milestones.slice(0,5).map(m =>
-            `${m.venture}: ${m.label} (${m.days_overdue}d)`).join(" · ");
+            `${esc(m.venture)}: ${esc(m.label)} (${esc(m.days_overdue)}d)`).join(" · ");
       } else { banner.classList.add("hidden"); }
     }
     async function renderGrid() {
@@ -57,10 +59,10 @@
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
       if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
       document.getElementById("grid").innerHTML = items.map(i => `
-        <div class="ui-card cursor-pointer" data-slug="${i.slug}">
-          <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${i.title}</div>
-          <div class="text-subtext text-xs mt-1">${i.stage} · ${i.priority}</div>
-          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${i.overdue_count} overdue</div>` : ""}
+        <div class="ui-card cursor-pointer" data-slug="${esc(i.slug)}">
+          <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${esc(i.title)}</div>
+          <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
+          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
         </div>`).join("");
       document.querySelectorAll("[data-slug]").forEach(el =>
         el.onclick = () => renderDetail(el.dataset.slug));
@@ -70,12 +72,12 @@
       const d = document.getElementById("detail");
       d.classList.remove("hidden");
       d.innerHTML = `
-        <h2 class="font-pixel text-mauve text-xs">${v.title}</h2>
-        <p class="text-subtext text-xs mt-2">${v.description||""}</p>
+        <h2 class="font-pixel text-mauve text-xs">${esc(v.title)}</h2>
+        <p class="text-subtext text-xs mt-2">${esc(v.description||"")}</p>
         <h3 class="mt-3 text-xs">Co-venturers</h3>
-        ${(v.co_venturers||[]).map(c=>`<span class="badge">${c.name} — ${c.role||""}</span>`).join(" ")}
+        ${(v.co_venturers||[]).map(c=>`<span class="badge">${esc(c.name)} — ${esc(c.role||"")}</span>`).join(" ")}
         <h3 class="mt-3 text-xs">Deadlines</h3>
-        ${(v.deadlines||[]).map(m=>`<div class="text-xs">${m.date} — ${m.label}</div>`).join("")}`;
+        ${(v.deadlines||[]).map(m=>`<div class="text-xs">${esc(m.date)} — ${esc(m.label)}</div>`).join("")}`;
     }
     document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
     renderStats(); renderGrid();
