@@ -89,6 +89,10 @@ class VenturesAccessor:
             "deadlines": deadlines,
             "overdue_count": len(overdue),
             "_overdue": overdue,
+            "milestones": fm.get("milestones") or [],
+            "financial": fm.get("financial") or {},
+            "links": fm.get("links") or {},
+            "related_ventures": fm.get("related_ventures") or [],
         }
 
     def _is_overdue(self, deadline: dict[str, Any]) -> bool:

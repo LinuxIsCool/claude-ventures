@@ -6,6 +6,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import ventures_backlog  # noqa: E402
 import ventures_projects  # noqa: E402
+import ventures_detail  # noqa: E402
 
 
 def _mk_backlog(tmp_path: Path) -> Path:
@@ -59,3 +60,45 @@ def test_projects_parse_and_list(tmp_path: Path):
     assert p["milestones"][1]["done"] is True
     lst = ventures_projects.list_for("Project Mirror", ventures_root=vroot)
     assert [x["slug"] for x in lst] == ["cognitive-engine"]
+
+
+def _mk_full_store(tmp_path: Path) -> tuple[Path, Path]:
+    vroot = tmp_path / "ventures"
+    (vroot / "active").mkdir(parents=True)
+    (vroot / "active" / "bcrg.md").write_text(
+        "---\nid: bcrg\ntitle: BCRG\nstage: active\npriority: critical\n"
+        "description: Validator research.\n"
+        "co_venturers:\n  - name: Shawn\n    role: Lead\n"
+        "milestones:\n  - id: ms1\n    title: Phase 2\n    status: complete\n    completed: true\n    deliverables: [x]\n"
+        "financial:\n  revenue_to_date: 50000\n  currency: CAD\n"
+        "links:\n  github: https://github.com/x\n"
+        "---\nbody\n"
+    )
+    bl = tmp_path / "backlog"
+    bl.mkdir()
+    (bl / "task-1.md").write_text("---\nid: 1\ntitle: Do thing\nstatus: To Do\npriority: high\nventure: bcrg\n---\n")
+    return vroot, bl
+
+
+def test_venture_detail_assembles(tmp_path: Path):
+    vroot, bl = _mk_full_store(tmp_path)
+    d = ventures_detail.venture("bcrg", ventures_root=vroot, backlog_dir=bl)
+    assert d["title"] == "BCRG"
+    assert d["milestones"][0]["id"] == "ms1"
+    assert d["financial"]["revenue_to_date"] == 50000
+    assert d["links"]["github"] == "https://github.com/x"
+    assert [t["title"] for t in d["tasks"]] == ["Do thing"]
+    assert d["co_venturers"][0]["name"] == "Shawn"
+
+
+def test_venture_detail_not_found(tmp_path: Path):
+    vroot, bl = _mk_full_store(tmp_path)
+    assert ventures_detail.venture("nope", ventures_root=vroot, backlog_dir=bl) == {"error": "not found", "slug": "nope"}
+
+
+def test_milestone_detail(tmp_path: Path):
+    vroot, bl = _mk_full_store(tmp_path)
+    d = ventures_detail.milestone("bcrg", "ms1", ventures_root=vroot, backlog_dir=bl)
+    assert d["title"] == "Phase 2"
+    assert d["venture"] == "bcrg"
+    assert "tasks" in d
