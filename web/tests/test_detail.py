@@ -122,3 +122,17 @@ def test_detail_routes_served(tmp_path: Path):
     assert conn.getresponse().status == 200
     conn.request("POST", "/api/venture/bcrg")
     assert conn.getresponse().status == 405
+
+
+def test_real_venture_detail_task_parity():
+    import subprocess
+    vroot = Path.home()/".claude"/"local"/"ventures"
+    if not (vroot/"active").is_dir():
+        import pytest; pytest.skip("no real store")
+    d = ventures_detail.venture("bcrg", ventures_root=vroot)
+    if d.get("error"):
+        import pytest; pytest.skip("bcrg absent")
+    bl = Path.home()/".claude"/"local"/"backlog"
+    grep = subprocess.run(["bash","-c", f"grep -lE '^venture: bcrg$' {bl}/*.md 2>/dev/null | wc -l"], capture_output=True, text=True)
+    venture_field_count = int(grep.stdout.strip() or 0)
+    assert len(d["tasks"]) >= venture_field_count
