@@ -62,6 +62,22 @@
     const state = { lifecycle: "all", q: "" };
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
       c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function qs() { return new URLSearchParams(location.search); }
+    function go(params) {
+      const u = new URL(location); u.search = new URLSearchParams(params).toString();
+      history.pushState({}, "", u); route();
+    }
+    async function route() {
+      const p = qs();
+      if (p.get("m")) { return renderMilestone(p.get("v"), p.get("m")); }
+      if (p.get("p")) { return renderProject(p.get("p")); }
+      if (p.get("v")) { return renderVenture(p.get("v")); }
+      document.getElementById("detail").classList.add("hidden");
+      document.getElementById("lifecycle-nav").classList.remove("hidden");
+      document.getElementById("grid").classList.remove("hidden");
+      renderStats(); renderGrid();
+    }
+    window.onpopstate = route;
     async function api(path) {
       const r = await fetch(path);
       if (!r.ok) throw new Error(path + " " + r.status);
@@ -100,22 +116,87 @@
           ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
         </div>`).join("");
       document.querySelectorAll("[data-slug]").forEach(el =>
-        el.onclick = () => renderDetail(el.dataset.slug));
+        el.onclick = () => go({ v: el.dataset.slug }));
     }
-    async function renderDetail(slug) {
-      const v = await api("api/detail/" + encodeURIComponent(slug));
+    function backBar(crumbs) {
+      return `<div class="mb-4 text-xs text-subtext">` +
+        crumbs.map(c => c.href !== undefined
+          ? `<a href="#" class="text-blue" data-go='${esc(JSON.stringify(c.href))}'>${esc(c.label)}</a>`
+          : esc(c.label)).join(" › ") + `</div>`;
+    }
+    function wireGo(scope) {
+      scope.querySelectorAll("[data-go]").forEach(el =>
+        el.onclick = e => { e.preventDefault(); go(JSON.parse(el.dataset.go)); });
+    }
+    function taskList(tasks) {
+      if (!tasks || !tasks.length) return `<p class="text-subtext text-xs">no linked tasks yet</p>`;
+      const dot = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
+      return `<div class="space-y-1">` + tasks.map(t=>`
+        <div class="flex items-center gap-2 text-xs">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot(t.priority)}"></span>
+          <span class="text-subtext">#${esc(t.id)}</span>
+          <span class="flex-1">${esc(t.title)}</span>
+          <span class="badge">${esc(t.status)}</span>
+          ${t.due?`<span class="text-subtext">${esc(t.due)}</span>`:""}
+        </div>`).join("") + `</div>`;
+    }
+    function enterDetail() {
+      document.getElementById("grid").classList.add("hidden");
+      document.getElementById("lifecycle-nav").classList.add("hidden");
       const d = document.getElementById("detail");
-      d.classList.remove("hidden");
-      d.innerHTML = `
-        <h2 class="font-pixel text-mauve text-xs">${esc(v.title)}</h2>
-        <p class="text-subtext text-xs mt-2">${esc(v.description||"")}</p>
-        <h3 class="mt-3 text-xs">Co-venturers</h3>
-        ${(v.co_venturers||[]).map(c=>`<span class="badge">${esc(c.name)} — ${esc(c.role||"")}</span>`).join(" ")}
-        <h3 class="mt-3 text-xs">Deadlines</h3>
-        ${(v.deadlines||[]).map(m=>`<div class="text-xs">${esc(m.date)} — ${esc(m.label)}</div>`).join("")}`;
+      d.className = "flex-1 p-4"; d.classList.remove("hidden"); return d;
+    }
+    async function renderVenture(slug) {
+      const v = await api("api/venture/" + encodeURIComponent(slug));
+      const d = enterDetail();
+      if (v.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Venture not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(v.title)}</h1>
+        <div class="text-subtext text-xs mb-3">${esc(v.stage)} · ${esc(v.priority)}</div>
+        <p class="text-xs mb-4">${esc(v.description||"")}</p>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones</h2>
+        ${(v.milestones||[]).map(m=>`<div class="text-xs mb-1 ${m.completed?'line-through text-subtext':''}">
+            <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,m:m.id}))}'>${esc(m.title||m.id)}</a>
+            <span class="badge ml-2">${esc(m.status||"")}</span></div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(v.tasks)}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Links &amp; Repos</h2>
+        ${Object.entries(v.links||{}).map(([k,val])=>`<div class="text-xs"><span class="text-subtext">${esc(k)}:</span> ${/^https?:/.test(String(val))?`<a class="text-blue" href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a>`:esc(val)}</div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Financial</h2>
+        ${v.financial&&Object.keys(v.financial).length?`<div class="text-xs">revenue to date: ${esc(v.financial.revenue_to_date??"—")} ${esc(v.financial.currency||"")}</div>`:`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Team</h2>
+        ${(v.co_venturers||[]).map(c=>`<span class="badge">${esc(c.name)} — ${esc(c.role||"")}</span>`).join(" ")||`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Projects</h2>
+        ${(v.projects||[]).map(p=>`<div class="text-xs"><a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,p:p.slug}))}'>${esc(p.slug)}</a> — ${esc(p.objective||"")}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}`;
+      wireGo(d);
+    }
+    async function renderProject(slug) {
+      const p = await api("api/project/" + encodeURIComponent(slug));
+      const d = enterDetail();
+      if (p.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Project not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:p.venture},{label:p.slug}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(p.slug)}</h1>
+        <div class="text-subtext text-xs mb-3">venture: ${esc(p.venture)}</div>
+        <p class="text-xs mb-4">${esc(p.objective||"")}</p>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones</h2>
+        ${(p.milestones||[]).map(m=>`<div class="text-xs mb-1 ${m.done?'line-through text-subtext':''}">${esc(m.title)}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(p.tasks)}`;
+      wireGo(d);
+    }
+    async function renderMilestone(v, m) {
+      const ms = await api("api/milestone/" + encodeURIComponent(v) + "/" + encodeURIComponent(m));
+      const d = enterDetail();
+      if (ms.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Milestone not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:ms.venture_title||v,href:{v:v}},{label:ms.title||m}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(ms.title||m)}</h1>
+        <div class="text-subtext text-xs mb-3">${esc(ms.status||"")}</div>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Deliverables</h2>
+        ${(ms.deliverables||[]).map(x=>`<div class="text-xs">• ${esc(x)}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}
+        ${ms.notes?`<h2 class="font-pixel text-xs text-green mt-4 mb-2">Notes</h2><p class="text-xs whitespace-pre-wrap">${esc(ms.notes)}</p>`:""}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(ms.tasks)}`;
+      wireGo(d);
     }
     document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
-    renderStats(); renderGrid();
+    route();
   </script>
 </body>
 </html>
