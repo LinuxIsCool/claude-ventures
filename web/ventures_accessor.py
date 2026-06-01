@@ -64,6 +64,13 @@ class VenturesAccessor:
             return None
         slug = str(fm.get("id") or md.stem)
         deadlines = fm.get("deadlines") or []
+        # Normalize deadline label: the documented schema uses `description`,
+        # while several live files use `label`. Carry a single `label` key so
+        # detail() + stats() render consistently regardless of which the
+        # author used.
+        for d in deadlines:
+            if isinstance(d, dict) and not d.get("label"):
+                d["label"] = d.get("description", "")
         overdue = [d for d in deadlines if self._is_overdue(d)]
         return {
             "slug": slug,
