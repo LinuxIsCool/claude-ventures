@@ -94,3 +94,10 @@ class VenturesAccessor:
                 "slug", "title", "stage", "priority", "lifecycle", "overdue_count"
             )})
         return out
+
+    def detail(self, item_id: str) -> dict[str, Any]:
+        for lifecycle, md in self._iter_files():
+            v = self._parse(lifecycle, md)
+            if v and v["slug"] == item_id:
+                return {k: val for k, val in v.items() if not k.startswith("_")}
+        return {"error": "not found", "slug": item_id}
