@@ -34,8 +34,9 @@ def build_kernel(
     data_root: Path | None = None,
 ) -> WebuiKernel:
     """Construct (don't start) the ventures substrate kernel. Read-only."""
+    from ventures_handler import VenturesKernel
     accessor = VenturesAccessor(data_root=data_root)
-    return WebuiKernel(
+    return VenturesKernel(
         accessor=accessor,
         port=port,
         bind=bind,
@@ -43,6 +44,8 @@ def build_kernel(
         signature_fn=accessor.signature,
         poll_interval_s=2.0,
         mutation_catalog=None,
+        ventures_root=data_root,
+        backlog_dir=None,
     )
 
 
