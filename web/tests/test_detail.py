@@ -5,6 +5,7 @@ HERE = Path(__file__).resolve().parent.parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import ventures_backlog  # noqa: E402
+import ventures_projects  # noqa: E402
 
 
 def _mk_backlog(tmp_path: Path) -> Path:
@@ -31,3 +32,30 @@ def test_tasks_for_milestone_uses_parent_id(tmp_path: Path):
     bl = _mk_backlog(tmp_path)
     tasks = ventures_backlog.tasks_for("bcrg", milestone="ms1", backlog_dir=bl)
     assert [t["title"] for t in tasks] == ["High via parent_id"]
+
+
+def _mk_projects(tmp_path: Path) -> Path:
+    d = tmp_path / "ventures" / "project-mirror" / "projects"
+    d.mkdir(parents=True)
+    (d / "cognitive-engine.md").write_text(
+        "# Project: Cognitive Engine\n"
+        "**Venture:** Project Mirror\n"
+        "**Objective:** Build the pipeline.\n\n"
+        "## Milestones\n"
+        "- [ ] **M1: Ingestion** — goal text\n"
+        "- [x] **M2: Graph** — done\n"
+    )
+    return tmp_path / "ventures"
+
+
+def test_projects_parse_and_list(tmp_path: Path):
+    vroot = _mk_projects(tmp_path)
+    p = ventures_projects.get("cognitive-engine", ventures_root=vroot)
+    assert p["slug"] == "cognitive-engine"
+    assert p["venture"] == "Project Mirror"
+    assert p["objective"] == "Build the pipeline."
+    assert len(p["milestones"]) == 2
+    assert p["milestones"][0]["title"].startswith("M1")
+    assert p["milestones"][1]["done"] is True
+    lst = ventures_projects.list_for("Project Mirror", ventures_root=vroot)
+    assert [x["slug"] for x in lst] == ["cognitive-engine"]
