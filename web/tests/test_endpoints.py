@@ -86,3 +86,17 @@ def test_stats_rolls_up_counts_and_overdue(tmp_path: Path):
     assert s["overdue_milestones"][0]["venture"] == "alpha"
     assert s["overdue_milestones"][0]["label"] == "Overdue milestone"
     assert s["overdue_milestones"][0]["days_overdue"] == 61
+
+
+def test_healthz_and_feed_and_signature(tmp_path: Path):
+    root = _make_store(tmp_path)
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    h = acc.healthz()
+    assert h["ok"] is True
+    assert h["namespace"] == "legion.claude-venture"
+    assert h["stats"]["key_metric"] == 1
+    feed = acc.feed({})
+    assert feed[0]["slug"] == "alpha"
+    sig1 = acc.signature()
+    (root / "active" / "alpha.md").write_text("---\nid: alpha\ntitle: X\nstage: active\n---\n")
+    assert acc.signature() != sig1
