@@ -100,3 +100,28 @@ def test_healthz_and_feed_and_signature(tmp_path: Path):
     sig1 = acc.signature()
     (root / "active" / "alpha.md").write_text("---\nid: alpha\ntitle: X\nstage: active\n---\n")
     assert acc.signature() != sig1
+
+
+import http.client
+import threading
+
+
+def _serve(kernel):
+    httpd = kernel.build_server()
+    th = threading.Thread(target=httpd.serve_forever, daemon=True)
+    th.start()
+    return th
+
+
+def test_build_kernel_serves_standard_routes(tmp_path: Path):
+    root = _make_store(tmp_path)
+    import server
+    kernel = server.build_kernel(port=0, data_root=root)
+    _serve(kernel)
+    port = kernel._server.server_address[1]
+    conn = http.client.HTTPConnection("127.0.0.1", port)
+    conn.request("GET", "/api/stats")
+    resp = conn.getresponse()
+    assert resp.status == 200
+    conn.request("POST", "/api/stats")
+    assert conn.getresponse().status == 405
