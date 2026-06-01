@@ -102,3 +102,23 @@ def test_milestone_detail(tmp_path: Path):
     assert d["title"] == "Phase 2"
     assert d["venture"] == "bcrg"
     assert "tasks" in d
+
+
+import http.client, threading, json as _json
+
+
+def test_detail_routes_served(tmp_path: Path):
+    vroot, bl = _mk_full_store(tmp_path)
+    import server
+    kernel = server.build_kernel(port=0, data_root=vroot)
+    srv = kernel.build_server()
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    conn = http.client.HTTPConnection("127.0.0.1", port)
+    conn.request("GET", "/api/venture/bcrg")
+    r = conn.getresponse(); assert r.status == 200
+    body = _json.loads(r.read()); assert body["title"] == "BCRG"
+    conn.request("GET", "/api/milestone/bcrg/ms1")
+    assert conn.getresponse().status == 200
+    conn.request("POST", "/api/venture/bcrg")
+    assert conn.getresponse().status == 405
