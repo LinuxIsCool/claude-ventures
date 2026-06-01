@@ -20,6 +20,8 @@ from typing import Any
 
 import yaml
 
+from claude_webui.healthz import healthz_response
+
 NAMESPACE = "legion.claude-venture"
 
 _HOME = Path.home()
@@ -126,3 +128,26 @@ class VenturesAccessor:
             "overdue_total": len(overdue),
             "overdue_milestones": overdue,
         }
+
+    def feed(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        items = self.list(params)
+        items.sort(key=lambda x: x["overdue_count"], reverse=True)
+        return items
+
+    def healthz(self) -> dict[str, Any]:
+        t0 = time.perf_counter()
+        s = self.stats()
+        resp = healthz_response(
+            namespace=NAMESPACE,
+            database=str(self.data_root),
+            elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+            ok=True,
+        )
+        resp["stats"] = {"key_metric": s["key_metric"], "key_metric_label": s["key_metric_label"]}
+        return resp
+
+    def signature(self) -> tuple:
+        sig = []
+        for _lifecycle, md in self._iter_files():
+            sig.append((str(md), md.stat().st_mtime_ns))
+        return tuple(sig)
