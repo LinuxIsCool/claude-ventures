@@ -125,3 +125,19 @@ def test_build_kernel_serves_standard_routes(tmp_path: Path):
     assert resp.status == 200
     conn.request("POST", "/api/stats")
     assert conn.getresponse().status == 405
+
+
+def test_count_parity_with_real_store():
+    """Guardrail vs TS<->Python parse drift: the accessor's active count must
+    equal the number of *.md files in the real active/ dir, and overdue_total
+    must be >= 0."""
+    from datetime import date
+    real_root = Path.home() / ".claude" / "local" / "ventures"
+    if not (real_root / "active").is_dir():
+        pytest.skip("real ventures store not present")
+    acc = VenturesAccessor(data_root=real_root, today=date(2026, 6, 1))
+    s = acc.stats()
+    active_files = len(list((real_root / "active").glob("*.md")))
+    assert s["by_lifecycle"]["active"] == active_files
+    assert s["overdue_total"] >= 0
+    assert s["key_metric"] == active_files
