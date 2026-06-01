@@ -136,3 +136,22 @@ def test_real_venture_detail_task_parity():
     grep = subprocess.run(["bash","-c", f"grep -lE '^venture: bcrg$' {bl}/*.md 2>/dev/null | wc -l"], capture_output=True, text=True)
     venture_field_count = int(grep.stdout.strip() or 0)
     assert len(d["tasks"]) >= venture_field_count
+
+
+def test_project_get_rejects_traversal(tmp_path: Path):
+    vroot = _mk_projects(tmp_path)  # creates vroot/project-mirror/projects/cognitive-engine.md
+    # write a sensitive file 2 levels above projects dir (i.e. at vroot level) — this is
+    # exactly where "../../SECRET" resolves from inside the projects/ dir
+    (vroot / "SECRET.md").write_text("---\ntop: secret\n---\nleak me\n")
+    for evil in ["../../SECRET", "../../../../etc/hostname", "..%2f..%2fSECRET", "/etc/passwd", "foo/bar"]:
+        assert ventures_projects.get(evil, ventures_root=vroot) is None, f"traversal not blocked: {evil}"
+    # legit slug still works
+    assert ventures_projects.get("cognitive-engine", ventures_root=vroot) is not None
+
+
+def test_milestone_join_requires_matching_venture(tmp_path: Path):
+    d = tmp_path / "backlog"; d.mkdir()
+    (d / "a.md").write_text("---\nid: 10\ntitle: Mine\nstatus: To Do\npriority: high\nparent_id: bcrg.proj.ms1\nparent_type: milestone\n---\n")
+    (d / "b.md").write_text("---\nid: 11\ntitle: Theirs\nstatus: To Do\npriority: high\nparent_id: regenai.proj.ms1\nparent_type: milestone\n---\n")
+    tasks = ventures_backlog.tasks_for("bcrg", milestone="ms1", backlog_dir=d)
+    assert [t["title"] for t in tasks] == ["Mine"]  # NOT "Theirs"
