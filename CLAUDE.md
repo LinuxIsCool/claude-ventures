@@ -1,5 +1,9 @@
 # Claude Ventures Plugin
 
+> **Vision:** claude-ventures keeps track of everything you're working on — your
+> projects, who's involved, and what's due — with the goal of one day organizing
+> your whole working life and running it forward on its own so you have to remember less.
+
 Venture portfolio management for creative, research, and professional initiatives.
 
 ## Getting Started
