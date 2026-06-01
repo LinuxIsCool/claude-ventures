@@ -56,3 +56,20 @@ def test_list_returns_summaries_with_lifecycle_and_overdue(tmp_path: Path):
     assert by_slug["alpha"]["overdue_count"] == 1
     assert by_slug["beta"]["lifecycle"] == "exploring"
     assert by_slug["beta"]["overdue_count"] == 0
+
+
+def test_detail_returns_full_record(tmp_path: Path):
+    root = _make_store(tmp_path)
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    rec = acc.detail("alpha")
+    assert rec["title"] == "Alpha Venture"
+    assert rec["co_venturers"] == [{"name": "Shawn Anderson", "role": "Lead"}]
+    assert len(rec["deadlines"]) == 2
+    assert rec["overdue_count"] == 1
+
+
+def test_detail_unknown_slug_returns_error(tmp_path: Path):
+    root = _make_store(tmp_path)
+    acc = VenturesAccessor(data_root=root, today=date(2026, 6, 1))
+    rec = acc.detail("does-not-exist")
+    assert rec == {"error": "not found", "slug": "does-not-exist"}
