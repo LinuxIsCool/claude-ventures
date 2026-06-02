@@ -89,7 +89,7 @@ class VenturesAccessor:
             "deadlines": deadlines,
             "overdue_count": len(overdue),
             "_overdue": overdue,
-            "milestones": fm.get("milestones") or [],
+            "milestones": (fm.get("milestones") if isinstance(fm.get("milestones"), list) else []),
             "financial": fm.get("financial") or {},
             "links": fm.get("links") or {},
             "related_ventures": fm.get("related_ventures") or [],

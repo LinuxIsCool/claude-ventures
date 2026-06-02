@@ -106,9 +106,10 @@ def _revenue_cumulative(acc: VenturesAccessor, today: date) -> list[dict[str, An
         rec = acc.detail(v["slug"])
         fin = rec.get("financial") or {}
         if isinstance(fin, dict):
-            rev = fin.get("revenue_to_date")
-            if isinstance(rev, (int, float)):
-                total += float(rev)
+            try:
+                total += float(fin.get("revenue_to_date") or 0)
+            except (TypeError, ValueError):
+                pass
     return [{"date": today.isoformat(), "value": total}]
 
 
@@ -152,8 +153,10 @@ def trends(ventures_root, backlog_dir, today: date, snapshot_path=None) -> dict:
     except Exception as exc:  # noqa: BLE001
         print(f"[ventures-web] trends: snapshot ensure failed: {exc}", file=sys.stderr)
 
-    # 2. Load snapshot rows for snapshot-based series.
-    rows = ventures_snapshot.load(snapshot_path)
+    # 2. Load snapshot rows for snapshot-based series. Sort by date so a
+    # backfilled/replayed past date can't put the series out of time order
+    # (lineChart plots by array index, and the "latest" label reads rows[-1]).
+    rows = sorted(ventures_snapshot.load(snapshot_path), key=lambda r: r.get("date", ""))
 
     acc = VenturesAccessor(data_root=Path(ventures_root), today=today)
 
