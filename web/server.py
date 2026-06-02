@@ -32,9 +32,20 @@ def build_kernel(
     port: int = DEFAULT_PORT,
     bind: str = "127.0.0.1",
     data_root: Path | None = None,
+    backlog_dir: Path | None = None,
 ) -> WebuiKernel:
-    """Construct (don't start) the ventures substrate kernel. Read-only."""
+    """Construct (don't start) the ventures substrate kernel. Read-only.
+
+    backlog_dir defaults to the canonical Legion backlog root when not
+    supplied. The Phase B overview endpoints (focus/timeline/priorities/
+    trends) call ``Path(backlog_dir)`` unconditionally, so a real path must
+    be threaded through — None would 500 the live mount.
+    """
     from ventures_handler import VenturesKernel
+    if data_root is None:
+        data_root = Path.home() / ".claude" / "local" / "ventures"
+    if backlog_dir is None:
+        backlog_dir = Path.home() / ".claude" / "local" / "backlog"
     accessor = VenturesAccessor(data_root=data_root)
     return VenturesKernel(
         accessor=accessor,
@@ -45,7 +56,7 @@ def build_kernel(
         poll_interval_s=2.0,
         mutation_catalog=None,
         ventures_root=data_root,
-        backlog_dir=None,
+        backlog_dir=backlog_dir,
     )
 
 
