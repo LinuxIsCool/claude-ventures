@@ -68,9 +68,12 @@ def compute(ventures_root, backlog_dir, today: date) -> dict[str, Any]:
                 milestones_complete += 1
         fin = rec.get("financial") or {}
         if isinstance(fin, dict):
-            rev = fin.get("revenue_to_date")
-            if isinstance(rev, (int, float)):
-                revenue_total += float(rev)
+            # Coerce string-valued revenue ("10000") consistently with
+            # ventures_priorities / ventures_trends — same field, same signal.
+            try:
+                revenue_total += float(fin.get("revenue_to_date") or 0)
+            except (TypeError, ValueError):
+                pass
 
     tasks_open = 0
     tasks_completed_total = 0
