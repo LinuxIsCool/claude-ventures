@@ -1,12 +1,17 @@
 # web/ventures_handler.py
 """VenturesHandler + VenturesKernel: 3 detail routes over the read-only kernel."""
 from __future__ import annotations
+from datetime import date
 from urllib.parse import unquote, urlparse
 
 from claude_webui import WebuiKernel
 from claude_webui.kernel import WebuiHandler
 
 import ventures_detail
+import ventures_focus
+import ventures_timeline
+import ventures_priorities
+import ventures_trends
 
 
 class VenturesHandler(WebuiHandler):
@@ -18,6 +23,14 @@ class VenturesHandler(WebuiHandler):
         vroot = self.ventures_root
         bl = self.backlog_dir
         try:
+            if path == "/api/focus":
+                self._send_json(ventures_focus.buckets(vroot, bl, date.today())); return
+            if path == "/api/timeline":
+                self._send_json(ventures_timeline.timeline(vroot, bl, date.today())); return
+            if path == "/api/priorities":
+                self._send_json(ventures_priorities.ranked(vroot, bl, date.today())); return
+            if path == "/api/trends":
+                self._send_json(ventures_trends.trends(vroot, bl, date.today())); return
             if path.startswith("/api/venture/"):
                 self._send_json(ventures_detail.venture(path[len("/api/venture/"):], ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/project/"):
