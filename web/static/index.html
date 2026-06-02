@@ -67,6 +67,8 @@
       const main = document.getElementById("page");
       main.className = "flex-1 p-3";
       main.classList.remove("hidden");
+      const vh = document.getElementById("view-host");
+      if (vh) vh.remove(); // clear any prior timeline/priorities/trends content
       document.getElementById("page-nav").classList.remove("hidden");
     }
     async function route() {
@@ -161,9 +163,264 @@
       ph.classList.remove("hidden");
       ph.textContent = label + " — coming in the next build";
     }
-    function renderTimeline()   { renderStub("Timeline"); }
-    function renderPriorities() { renderStub("Priorities"); }
-    function renderTrends()     { renderStub("Trends"); }
+    // ---- shared helpers for the view renderers ----
+    function viewPage() {
+      // Hide the portfolio-only chrome, surface a single content container in #page.
+      document.getElementById("focus-rail").classList.add("hidden");
+      document.getElementById("lifecycle-chips").classList.add("hidden");
+      document.getElementById("grid").classList.add("hidden");
+      document.getElementById("placeholder").classList.add("hidden");
+      renderStats(); // keep header health-slot fresh
+      const main = document.getElementById("page");
+      let host = document.getElementById("view-host");
+      if (!host) {
+        host = document.createElement("div");
+        host.id = "view-host";
+        main.appendChild(host);
+      }
+      host.innerHTML = "";
+      return host;
+    }
+    function parseDate(s) {
+      if (!s) return null;
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+      if (!m) return null;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function humanize(name) { return String(name).replace(/_/g, " "); }
+
+    // ===================== TIMELINE =====================
+    const tlState = { q:"", types:{milestone:true,deadline:true,task:true},
+                      priority:"all", status:"all", zoom:"month" };
+    let tlData = null;
+    const ZOOM = { day:4, week:2, month:1, quarter:0.6 };
+    function renderTimeline() {
+      const host = viewPage();
+      host.innerHTML = `<div id="tl-wrap"></div>`;
+      if (tlData) { drawTimeline(); return; }
+      api("api/timeline").then(d => { tlData = d; drawTimeline(); })
+        .catch(e => { document.getElementById("tl-wrap").innerHTML =
+          `<p class="text-subtext text-sm">timeline unavailable</p>`; });
+    }
+    function tlGlyph(type) {
+      return type === "milestone" ? "◆" : type === "deadline" ? "⚑" : "●";
+    }
+    function drawTimeline() {
+      const wrap = document.getElementById("tl-wrap");
+      if (!wrap) return;
+      const d = tlData || { lanes: [], range: {} };
+      const range = d.range || {};
+      const minD = parseDate(range.min), maxD = parseDate(range.max);
+      const span = (minD && maxD) ? (maxD.getTime() - minD.getTime()) : 0;
+      const pct = dt => {
+        if (!minD || !maxD || span <= 0) return null;
+        return ((dt.getTime() - minD.getTime()) / span) * 100;
+      };
+      const typeOpts = ["milestone","deadline","task"];
+      const prioOpts = ["all","critical","high","medium","low"];
+      const statusSet = new Set();
+      (d.lanes||[]).forEach(l => (l.items||[]).forEach(it => { if (it.status) statusSet.add(it.status); }));
+      const statusOpts = ["all", ...Array.from(statusSet).sort()];
+
+      const controls = `
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <input id="tl-q" class="input" placeholder="search items…" value="${esc(tlState.q)}" />
+          ${typeOpts.map(t => `<label class="badge" style="cursor:pointer">
+            <input type="checkbox" data-tl-type="${t}" ${tlState.types[t]?"checked":""} style="margin-right:4px"/>${esc(t)}</label>`).join("")}
+          <select id="tl-prio" class="input">${prioOpts.map(p=>`<option value="${esc(p)}" ${tlState.priority===p?"selected":""}>${p==="all"?"all priorities":esc(p)}</option>`).join("")}</select>
+          <select id="tl-status" class="input">${statusOpts.map(s=>`<option value="${esc(s)}" ${tlState.status===s?"selected":""}>${s==="all"?"all status":esc(s)}</option>`).join("")}</select>
+          <span class="text-subtext text-xs ml-2">zoom:</span>
+          ${["day","week","month","quarter"].map(z=>`<span class="chip ${tlState.zoom===z?"active":""}" data-tl-zoom="${z}">${z}</span>`).join("")}
+        </div>`;
+
+      if (!minD || !maxD || span <= 0) {
+        wrap.innerHTML = controls + `<p class="text-subtext text-sm">nothing on the timeline yet</p>`;
+        wireTimelineControls();
+        return;
+      }
+
+      const q = tlState.q.toLowerCase();
+      const keep = it =>
+        tlState.types[it.type] &&
+        (tlState.priority === "all" || (it.priority||"") === tlState.priority) &&
+        (tlState.status === "all" || (it.status||"") === tlState.status) &&
+        (!q || String(it.title||"").toLowerCase().includes(q));
+
+      const trackWidth = Math.round(100 * (ZOOM[tlState.zoom] || 1));
+      const today = new Date(); today.setHours(0,0,0,0);
+      const todayPct = pct(today);
+      const nowLine = (todayPct != null && todayPct >= 0 && todayPct <= 100)
+        ? `<div title="today" style="position:absolute;top:0;bottom:0;left:${todayPct}%;width:1px;background:#cba6f766;z-index:1"></div>` : "";
+
+      const lanesHtml = (d.lanes||[]).map(lane => {
+        const items = (lane.items||[]).filter(it => parseDate(it.date) && keep(it));
+        const marks = items.map(it => {
+          const x = pct(parseDate(it.date));
+          const color = dotColor(it.priority);
+          const tip = esc(it.title) + " · " + esc(it.date) + " · " + esc(it.status||"");
+          const ref = (it.type === "milestone" && it.id)
+            ? { v: lane.venture, m: it.id } : { v: lane.venture };
+          return `<span class="tl-mark" title="${tip}" data-go='${esc(JSON.stringify(ref))}'
+            style="position:absolute;left:${x}%;top:50%;transform:translate(-50%,-50%);color:${color};
+            font-size:0.8rem;line-height:1;cursor:pointer;z-index:2">${tlGlyph(it.type)}</span>`;
+        }).join("");
+        return `<div class="flex items-stretch gap-2 mb-1">
+          <div class="text-xs" style="width:160px;flex:none">
+            <a href="#" class="nav-link" style="padding:6px 8px" data-go='${esc(JSON.stringify({v:lane.venture}))}'>${esc(lane.title||lane.venture)}</a>
+          </div>
+          <div style="flex:1;overflow-x:auto">
+            <div style="position:relative;height:32px;width:${trackWidth}%;min-width:100%;
+              border-bottom:1px solid #313244;background:#181825;border-radius:4px">
+              ${nowLine}${marks}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+
+      const legend = `<div class="text-subtext text-xs mt-3">
+        <span style="color:#cdd6f4">◆</span> milestone &nbsp;
+        <span style="color:#cdd6f4">⚑</span> deadline &nbsp;
+        <span style="color:#cdd6f4">●</span> task &nbsp;·&nbsp;
+        range ${esc(range.min)} → ${esc(range.max)}</div>`;
+
+      wrap.innerHTML = controls + (lanesHtml || `<p class="text-subtext text-sm">no items match the filters</p>`) + legend;
+      wireTimelineControls();
+      wireGo(wrap);
+    }
+    function wireTimelineControls() {
+      const wrap = document.getElementById("tl-wrap");
+      if (!wrap) return;
+      const qel = wrap.querySelector("#tl-q");
+      if (qel) qel.oninput = e => { tlState.q = e.target.value; drawTimeline(); requeryFocus(); };
+      wrap.querySelectorAll("[data-tl-type]").forEach(el =>
+        el.onchange = () => { tlState.types[el.dataset.tlType] = el.checked; drawTimeline(); });
+      const prio = wrap.querySelector("#tl-prio");
+      if (prio) prio.onchange = () => { tlState.priority = prio.value; drawTimeline(); };
+      const st = wrap.querySelector("#tl-status");
+      if (st) st.onchange = () => { tlState.status = st.value; drawTimeline(); };
+      wrap.querySelectorAll("[data-tl-zoom]").forEach(el =>
+        el.onclick = () => { tlState.zoom = el.dataset.tlZoom; drawTimeline(); });
+    }
+    function requeryFocus() {
+      // keep search-box focus across drawTimeline re-renders
+      const qel = document.querySelector("#tl-q");
+      if (qel) { qel.focus(); const v = qel.value; qel.setSelectionRange(v.length, v.length); }
+    }
+
+    // ===================== PRIORITIES =====================
+    async function renderPriorities() {
+      const host = viewPage();
+      let d;
+      try { d = await api("api/priorities"); }
+      catch (e) { host.innerHTML = `<p class="text-subtext text-sm">priorities unavailable</p>`; return; }
+      const items = d.items || [];
+      if (!items.length) { host.innerHTML = `<p class="text-subtext text-sm">no priorities</p>`; return; }
+      const row = it => {
+        const sp = it.score_parts || {};
+        const tip = `urgency ${sp.urgency||0} · manual ${sp.manual||0} · stage ${sp.stage||0} · financial ${sp.financial||0}`;
+        return `<div class="ui-card" style="cursor:pointer" data-go='${esc(JSON.stringify(it.ref||{}))}'>
+          <div class="flex items-center gap-2">
+            <span class="badge" title="${esc(tip)}" style="border-color:${dotColor(it.priority)};color:${dotColor(it.priority)}">${esc(it.score)}</span>
+            <span class="flex-1 text-xs">${esc(it.title)}</span>
+            <span class="badge">${esc(it.kind)}</span>
+          </div>
+          <div class="text-subtext text-xs mt-1 ml-1">
+            <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:it.venture}))}'>${esc(it.venture)}</a>
+            ${it.due ? ` · due ${esc(it.due)}` : ""}
+          </div>
+        </div>`;
+      };
+      const top = items.slice(0, 5);
+      host.innerHTML = `
+        <h2 class="font-pixel text-xs text-mauve mb-2">Top 5</h2>
+        <div class="grid gap-2 mb-5" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${top.map(row).join("")}</div>
+        <h2 class="font-pixel text-xs text-green mb-2">All priorities (${items.length})</h2>
+        <div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${items.map(row).join("")}</div>`;
+      wireGo(host);
+    }
+
+    // ===================== TRENDS =====================
+    function lineChart(points, opts) {
+      opts = opts || {};
+      const W = opts.width || 320, H = opts.height || 120, color = opts.color || "#89b4fa";
+      const label = esc(opts.label || "");
+      const padL = 6, padR = 6, padT = 10, padB = 14;
+      const iw = W - padL - padR, ih = H - padT - padB;
+      const pts = (points || []).filter(p => typeof p.value === "number" && isFinite(p.value));
+      const baseline = `<line x1="${padL}" y1="${padT+ih}" x2="${padL+iw}" y2="${padT+ih}" stroke="#45475a" stroke-width="1"/>
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+ih}" stroke="#45475a" stroke-width="1"/>`;
+      const head = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="background:#181825;border-radius:4px">`;
+      const title = `<text x="${padL}" y="9" fill="#bac2de" font-size="9" font-family="monospace">${label}</text>`;
+      if (pts.length === 0) {
+        return head + baseline + title + `<text x="${padL+4}" y="${padT+ih/2}" fill="#7f849c" font-size="9" font-family="monospace">no data</text></svg>`;
+      }
+      let vmin = Infinity, vmax = -Infinity;
+      pts.forEach(p => { if (p.value < vmin) vmin = p.value; if (p.value > vmax) vmax = p.value; });
+      const range = (vmax - vmin) || 1;
+      const n = pts.length;
+      const xOf = i => padL + (n === 1 ? iw/2 : (i/(n-1))*iw);
+      const yOf = v => padT + ih - ((v - vmin)/range)*ih;
+      const last = pts[n-1];
+      let body;
+      if (n === 1) {
+        body = `<circle cx="${xOf(0)}" cy="${yOf(pts[0].value)}" r="3" fill="${color}"/>`;
+      } else {
+        const poly = pts.map((p,i) => `${xOf(i).toFixed(1)},${yOf(p.value).toFixed(1)}`).join(" ");
+        body = `<polyline points="${poly}" fill="none" stroke="${color}" stroke-width="1.5"/>
+          <circle cx="${xOf(n-1)}" cy="${yOf(last.value)}" r="2.5" fill="${color}"/>`;
+      }
+      const lastTxt = esc(String(last.value));
+      const lx = Math.min(xOf(n-1), W - padR - lastTxt.length*5.2);
+      const lbl = `<text x="${Math.max(padL, lx)}" y="${Math.max(padT+7, yOf(last.value)-4)}" fill="${color}" font-size="9" font-family="monospace">${lastTxt}</text>`;
+      return head + baseline + title + body + lbl + `</svg>`;
+    }
+    async function renderTrends() {
+      const host = viewPage();
+      let d;
+      try { d = await api("api/trends"); }
+      catch (e) { host.innerHTML = `<p class="text-subtext text-sm">trends unavailable</p>`; return; }
+      const series = d.series || {};
+      const derivable = new Set(d.derivable || []);
+      const snapshot = new Set(d.snapshot_based || []);
+
+      const card = name => {
+        const pts = series[name] || [];
+        // ventures_by_stage (and any dict-valued series): render as a stage legend, not a chart.
+        if (pts.length && pts[0].value && typeof pts[0].value === "object") {
+          const latest = pts[pts.length-1];
+          const legend = Object.entries(latest.value || {})
+            .map(([k,v]) => `<span class="badge">${esc(k)}: ${esc(v)}</span>`).join(" ")
+            || `<span class="text-subtext text-xs">no data</span>`;
+          return `<div class="ui-card">
+            <div class="text-xs text-text mb-2">${esc(humanize(name))}</div>
+            <div>${legend}</div>
+            <div class="text-subtext text-xs mt-2">latest snapshot ${esc(latest.date||"")}</div>
+          </div>`;
+        }
+        const svg = lineChart(pts, { label: humanize(name) });
+        let note = "";
+        if (pts.length === 0) note = `<div class="text-subtext text-xs mt-1">no data yet</div>`;
+        else if (pts.length < 2) note = `<div class="text-subtext text-xs mt-1">data starts ${esc(pts[0].date||"")}</div>`;
+        return `<div class="ui-card">${svg}${note}</div>`;
+      };
+
+      const group = (title, names) => {
+        const present = names.filter(n => n in series);
+        if (!present.length) return "";
+        return `<h2 class="font-pixel text-xs text-mauve mb-2 mt-1">${esc(title)}</h2>
+          <div class="grid gap-3 mb-5" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
+            ${present.map(card).join("")}</div>`;
+      };
+      // any series not classified falls into a misc group
+      const classified = new Set([...derivable, ...snapshot]);
+      const misc = Object.keys(series).filter(n => !classified.has(n));
+      host.innerHTML =
+        group("Derived from current data", [...derivable]) +
+        group("Tracked over time", [...snapshot]) +
+        (misc.length ? group("Other", misc) : "") ||
+        `<p class="text-subtext text-sm">no trend data yet</p>`;
+    }
     async function renderGrid() {
       let items = await api("api/list");
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
