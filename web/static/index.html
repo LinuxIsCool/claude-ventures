@@ -21,6 +21,14 @@
   .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
+  .nav-link.active { background:#1e1e30; color:#cba6f7; }
+  .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
+          font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
+  .chip:hover { border-color:#89b4fa66; color:#89b4fa; }
+  .chip.active { background:#1e1e30; border-color:#cba6f7; color:#cba6f7; }
+  .focus-col { background:#181825; border:1px solid #313244; border-radius:6px; padding:10px; }
+  .focus-item { cursor:pointer; border-radius:4px; padding:3px 4px; transition:background 0.12s ease; }
+  .focus-item:hover { background:#1e1e30; }
 </style>
 </head>
 <body class="bg-base text-text font-mono">
@@ -30,17 +38,22 @@
     <span id="healthz-slot" class="badge"></span>
   </header>
 
-  <div id="overdue-banner" class="hidden bg-red/20 border border-red text-red px-3 py-2"></div>
-
   <div class="flex">
-    <aside id="lifecycle-nav" class="w-48 p-3 border-r border-overlay"></aside>
-    <main id="grid" class="flex-1 p-3 grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></main>
+    <aside id="page-nav" class="w-48 p-3 border-r border-overlay"></aside>
+    <main id="page" class="flex-1 p-3">
+      <div id="focus-rail"></div>
+      <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
+      <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
+      <div id="placeholder" class="hidden text-subtext text-sm p-6"></div>
+    </main>
     <section id="detail" class="w-96 p-3 border-l border-overlay hidden"></section>
   </div>
 
   <script src="static/embedded-bar.js"></script>
   <script>
-    const state = { lifecycle: "all", q: "" };
+    const state = { lifecycle: "all", q: "", view: "portfolio" };
+    const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
+    const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
       c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     function qs() { return new URLSearchParams(location.search); }
@@ -48,17 +61,37 @@
       const u = new URL(location); u.search = new URLSearchParams(params).toString();
       history.pushState({}, "", u); route();
     }
+    function showPage() {
+      // Reset page <main> back to the standard layout (detail renderers mutate it).
+      document.getElementById("detail").classList.add("hidden");
+      const main = document.getElementById("page");
+      main.className = "flex-1 p-3";
+      main.classList.remove("hidden");
+      document.getElementById("page-nav").classList.remove("hidden");
+    }
     async function route() {
       const p = qs();
       if (p.get("m")) { return renderMilestone(p.get("v"), p.get("m")); }
       if (p.get("p")) { return renderProject(p.get("p")); }
       if (p.get("v")) { return renderVenture(p.get("v")); }
-      document.getElementById("detail").classList.add("hidden");
-      document.getElementById("lifecycle-nav").classList.remove("hidden");
-      document.getElementById("grid").classList.remove("hidden");
-      renderStats(); renderGrid();
+      const view = VIEWS.includes(p.get("view")) ? p.get("view") : "portfolio";
+      state.view = view;
+      showPage();
+      renderNav();
+      if (view === "portfolio") return renderPortfolio();
+      if (view === "timeline") return renderTimeline();
+      if (view === "priorities") return renderPriorities();
+      if (view === "trends") return renderTrends();
     }
     window.onpopstate = route;
+    function renderNav() {
+      const nav = document.getElementById("page-nav");
+      const labels = { portfolio:"Portfolio", timeline:"Timeline", priorities:"Priorities", trends:"Trends" };
+      nav.innerHTML = VIEWS.map(v =>
+        `<div class="nav-link font-pixel ${state.view===v?"active":""}" data-view="${v}">${labels[v]}</div>`).join("");
+      nav.querySelectorAll("[data-view]").forEach(el =>
+        el.onclick = () => go({ view: el.dataset.view }));
+    }
     async function api(path) {
       const r = await fetch(path);
       if (!r.ok) throw new Error(path + " " + r.status);
@@ -72,20 +105,65 @@
       const s = await api("api/stats");
       document.getElementById("healthz-slot").textContent =
         `${s.key_metric} active · ${s.overdue_total} overdue`;
-      const nav = document.getElementById("lifecycle-nav");
-      nav.innerHTML = `<div class="nav-link" data-lc="all">All</div>` +
+      const chips = document.getElementById("lifecycle-chips");
+      chips.innerHTML = `<span class="chip ${state.lifecycle==="all"?"active":""}" data-lc="all">All</span>` +
         Object.entries(s.by_lifecycle).map(([lc,n]) =>
-          `<div class="nav-link ${lifecycleColor(lc)}" data-lc="${lc}">${lc} (${n})</div>`).join("");
-      nav.querySelectorAll("[data-lc]").forEach(el =>
-        el.onclick = () => { state.lifecycle = el.dataset.lc; renderGrid(); });
-      const banner = document.getElementById("overdue-banner");
-      if (s.overdue_total) {
-        banner.classList.remove("hidden");
-        banner.innerHTML = `<b>${esc(s.overdue_total)} overdue milestones.</b> ` +
-          s.overdue_milestones.slice(0,5).map(m =>
-            `${esc(m.venture)}: ${esc(m.label)} (${esc(m.days_overdue)}d)`).join(" · ");
-      } else { banner.classList.add("hidden"); }
+          `<span class="chip ${state.lifecycle===lc?"active":""}" data-lc="${esc(lc)}">${esc(lc)} (${esc(n)})</span>`).join("");
+      chips.querySelectorAll("[data-lc]").forEach(el =>
+        el.onclick = () => { state.lifecycle = el.dataset.lc; renderStats(); renderGrid(); });
     }
+    async function renderFocusRail() {
+      const rail = document.getElementById("focus-rail");
+      let f;
+      try { f = await api("api/focus"); }
+      catch (e) { rail.innerHTML = ""; return; }
+      const cols = [
+        { key:"today", label:"Today" },
+        { key:"this_week", label:"This Week" },
+        { key:"soon", label:"Soon" },
+        { key:"attention", label:"Needs attention" },
+      ];
+      const colHtml = c => {
+        const items = (f[c.key] || []);
+        const body = items.length ? items.map((it, i) => `
+          <div class="focus-item" data-go='${esc(JSON.stringify(it.ref||{}))}'>
+            <div class="flex items-center gap-2 text-xs">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:${dotColor(it.priority)}"></span>
+              <span class="flex-1">${esc(it.title)}</span>
+            </div>
+            <div class="text-subtext text-xs ml-4">${esc(it.venture)} · ${esc(it.date)}</div>
+          </div>`).join("")
+          : `<p class="text-subtext text-xs">nothing scheduled</p>`;
+        return `<div class="focus-col">
+          <div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)}</div>
+          <div class="space-y-1">${body}</div>
+        </div>`;
+      };
+      rail.innerHTML = `<div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">` +
+        cols.map(colHtml).join("") + `</div>`;
+      wireGo(rail);
+    }
+    async function renderPortfolio() {
+      document.getElementById("focus-rail").classList.remove("hidden");
+      document.getElementById("lifecycle-chips").classList.remove("hidden");
+      document.getElementById("grid").classList.remove("hidden");
+      document.getElementById("placeholder").classList.add("hidden");
+      await renderStats();
+      renderFocusRail();
+      renderGrid();
+    }
+    function renderStub(label) {
+      document.getElementById("focus-rail").classList.add("hidden");
+      document.getElementById("lifecycle-chips").classList.add("hidden");
+      document.getElementById("grid").classList.add("hidden");
+      renderStats(); // keep header health-slot fresh
+      const ph = document.getElementById("placeholder");
+      ph.classList.remove("hidden");
+      ph.textContent = label + " — coming in the next build";
+    }
+    function renderTimeline()   { renderStub("Timeline"); }
+    function renderPriorities() { renderStub("Priorities"); }
+    function renderTrends()     { renderStub("Trends"); }
     async function renderGrid() {
       let items = await api("api/list");
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
@@ -122,8 +200,8 @@
         </div>`).join("") + `</div>`;
     }
     function enterDetail() {
-      document.getElementById("grid").classList.add("hidden");
-      document.getElementById("lifecycle-nav").classList.add("hidden");
+      document.getElementById("page").classList.add("hidden");
+      document.getElementById("page-nav").classList.add("hidden");
       const d = document.getElementById("detail");
       d.className = "flex-1 p-4"; d.classList.remove("hidden"); return d;
     }
