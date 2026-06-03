@@ -12,7 +12,9 @@
  *   bun run scripts/migrate-fractal.ts --venture bcrg --apply    # write the tree
  *
  * Safety:
- *   - dry-run is the default; --apply is required to write.
+ *   - dry-run is the default; --apply is required to write SOURCE DATA (ventures/backlog).
+ *     A dry-run still writes its review report under ventures/_migration/<date>/ — that
+ *     report IS the review surface and never touches source data.
  *   - ProjectStore.create / MilestoneStore.create throw on pre-existing entities,
  *     so re-running --apply is safe (won't clobber).
  *   - Rollback for a venture tree: `rm -rf ~/.claude/local/ventures/<venture>/projects`
@@ -152,7 +154,10 @@ const BACKLOG_FK: Record<string, Record<string, string>> = {
 
 function parentTypeOf(parentId: string): "venture" | "project" | "milestone" {
   const depth = parentId.split(".").length;
-  return depth === 1 ? "venture" : depth === 2 ? "project" : "milestone";
+  if (depth === 1) return "venture";
+  if (depth === 2) return "project";
+  if (depth === 3) return "milestone";
+  throw new Error(`invalid composite parent_id "${parentId}" — expected 1–3 dot-segments`);
 }
 
 function fkTargetExists(parentId: string): boolean {
@@ -167,13 +172,19 @@ function fkTargetExists(parentId: string): boolean {
   return existsSync(join(VENTURES_ROOT, parts[0], "projects", parts[1], "milestones", `${parts[2]}.md`));
 }
 
-/** Surgically insert parent_id + parent_type after the `id:` line. No full rewrite. */
+/** Surgically insert parent_id + parent_type after the `id:` line, scoped STRICTLY
+ *  to the YAML frontmatter block (between the first two `---` fences) so a body line
+ *  starting with `id:`/`parent_id:` can never trigger a false match or body corruption. */
 function insertFk(content: string, parentId: string, parentType: string): { content: string; status: string } {
-  if (/^parent_id:/m.test(content)) return { content, status: "already-has-fk (skipped)" };
   const lines = content.split("\n");
-  const idIdx = lines.findIndex((l) => /^id:/.test(l));
-  if (idIdx === -1) return { content, status: "NO id: line — skipped" };
-  lines.splice(idIdx + 1, 0, `parent_id: ${parentId}`, `parent_type: ${parentType}`);
+  if (lines[0]?.trim() !== "---") return { content, status: "NO frontmatter fence — skipped" };
+  const closeIdx = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
+  if (closeIdx === -1) return { content, status: "unterminated frontmatter — skipped" };
+  const fm = lines.slice(1, closeIdx);                       // frontmatter body only
+  if (fm.some((l) => /^parent_id:/.test(l))) return { content, status: "already-has-fk (skipped)" };
+  const relIdIdx = fm.findIndex((l) => /^id:/.test(l));
+  if (relIdIdx === -1) return { content, status: "NO id: in frontmatter — skipped" };
+  lines.splice(1 + relIdIdx + 1, 0, `parent_id: ${parentId}`, `parent_type: ${parentType}`);
   return { content: lines.join("\n"), status: "inserted" };
 }
 
