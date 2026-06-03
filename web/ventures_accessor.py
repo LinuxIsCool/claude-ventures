@@ -28,6 +28,14 @@ _HOME = Path.home()
 _DATA_ROOT_DEFAULT = _HOME / ".claude" / "local" / "ventures"
 _LIFECYCLES = ("seed", "exploring", "active", "sustaining", "dormant", "harvesting")
 
+# Module-level cache of fully-parsed venture records, keyed by resolved
+# data_root. Invalidated by mtime-signature (tuple of (path, mtime_ns) pairs),
+# mirroring the proven pattern in ventures_backlog.py. Steady-state cost is an
+# O(n) signature scan instead of O(n) YAML parse per call. The cached list
+# holds the full parsed dicts (including _-prefixed keys); list()/detail()/
+# stats() read from it and strip internal keys at the boundary.
+_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+
 
 def _split_frontmatter(text: str) -> dict[str, Any]:
     if not text.startswith("---"):
@@ -53,6 +61,27 @@ class VenturesAccessor:
                 continue
             for md in sorted(d.glob("*.md")):
                 yield lifecycle, md
+
+    def _signature(self) -> tuple:
+        """mtime-signature over all venture files. Reused by the parse cache
+        and aligned with the public signature() the kernel polls."""
+        return tuple((str(md), md.stat().st_mtime_ns) for _lc, md in self._iter_files())
+
+    def _records(self) -> list[dict[str, Any]]:
+        """Parse every venture file ONCE into full parsed dicts and cache the
+        result, keyed by (resolved data_root, today). Invalidated when the
+        mtime-signature changes. Callers must not mutate the returned dicts."""
+        key = (str(self.data_root.resolve()), self._today.isoformat())
+        sig = self._signature()
+        entry = _CACHE.get(key)
+        if entry is None or entry["sig"] != sig:
+            recs: list[dict[str, Any]] = []
+            for lifecycle, md in self._iter_files():
+                v = self._parse(lifecycle, md)
+                if v is not None:
+                    recs.append(v)
+            _CACHE[key] = {"sig": sig, "records": recs}
+        return _CACHE[key]["records"]
 
     def _parse(self, lifecycle: str, md: Path) -> dict[str, Any] | None:
         try:
@@ -110,30 +139,23 @@ class VenturesAccessor:
 
     def list(self, params: dict[str, Any]) -> list[dict[str, Any]]:
         out = []
-        for lifecycle, md in self._iter_files():
-            v = self._parse(lifecycle, md)
-            if v is None:
-                continue
+        for v in self._records():
             out.append({k: v[k] for k in (
                 "slug", "title", "stage", "priority", "lifecycle", "overdue_count"
             )})
         return out
 
     def detail(self, item_id: str) -> dict[str, Any]:
-        for lifecycle, md in self._iter_files():
-            v = self._parse(lifecycle, md)
-            if v and v["slug"] == item_id:
+        for v in self._records():
+            if v["slug"] == item_id:
                 return {k: val for k, val in v.items() if not k.startswith("_")}
         return {"error": "not found", "slug": item_id}
 
     def stats(self) -> dict[str, Any]:
         by_lifecycle = {lc: 0 for lc in _LIFECYCLES}
         overdue: list[dict[str, Any]] = []
-        for lifecycle, md in self._iter_files():
-            v = self._parse(lifecycle, md)
-            if v is None:
-                continue
-            by_lifecycle[lifecycle] += 1
+        for v in self._records():
+            by_lifecycle[v["lifecycle"]] += 1
             for d in v["_overdue"]:
                 dt = datetime.strptime(str(d["date"]).strip(), "%Y-%m-%d").date()
                 overdue.append({
@@ -169,7 +191,4 @@ class VenturesAccessor:
         return resp
 
     def signature(self) -> tuple:
-        sig = []
-        for _lifecycle, md in self._iter_files():
-            sig.append((str(md), md.stat().st_mtime_ns))
-        return tuple(sig)
+        return self._signature()
