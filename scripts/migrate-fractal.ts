@@ -132,13 +132,92 @@ const PLANS: Record<string, VenturePlan> = {
   },
 };
 
+// Hand-curated backlog FK mapping (judgment, reviewed by Shawn). Key = task id
+// (as it appears in frontmatter `id:`), value = composite parent slug.
+// parent_type is derived from dot-depth: 0=venture, 1=project, 2=milestone.
+const BACKLOG_FK: Record<string, Record<string, string>> = {
+  bcrg: {
+    "429": "bcrg.avalanche-phase2.m1-data-kickoff",
+    "task-025": "bcrg",
+    "408": "bcrg.cadcad-grant",
+    "411": "bcrg.cadcad-grant",
+    "419": "bcrg.cadcad-grant.proposal-submission",
+    "467": "bcrg.cadcad-grant.proposal-submission",
+    "533": "bcrg.avalanche-phase2",
+    "535": "bcrg.avalanche-phase2",
+    "536": "bcrg.avalanche-phase2",
+    "537": "bcrg.cadcad-grant",
+  },
+};
+
+function parentTypeOf(parentId: string): "venture" | "project" | "milestone" {
+  const depth = parentId.split(".").length;
+  return depth === 1 ? "venture" : depth === 2 ? "project" : "milestone";
+}
+
+function fkTargetExists(parentId: string): boolean {
+  const parts = parentId.split(".");
+  if (parts.length === 1) {
+    return ["active", "exploring", "sustaining", "dormant", "seed", "harvesting"]
+      .some((st) => existsSync(join(VENTURES_ROOT, st, `${parts[0]}.md`)));
+  }
+  if (parts.length === 2) {
+    return existsSync(join(VENTURES_ROOT, parts[0], "projects", parts[1], "project.md"));
+  }
+  return existsSync(join(VENTURES_ROOT, parts[0], "projects", parts[1], "milestones", `${parts[2]}.md`));
+}
+
+/** Surgically insert parent_id + parent_type after the `id:` line. No full rewrite. */
+function insertFk(content: string, parentId: string, parentType: string): { content: string; status: string } {
+  if (/^parent_id:/m.test(content)) return { content, status: "already-has-fk (skipped)" };
+  const lines = content.split("\n");
+  const idIdx = lines.findIndex((l) => /^id:/.test(l));
+  if (idIdx === -1) return { content, status: "NO id: line — skipped" };
+  lines.splice(idIdx + 1, 0, `parent_id: ${parentId}`, `parent_type: ${parentType}`);
+  return { content: lines.join("\n"), status: "inserted" };
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const ventureIdx = args.indexOf("--venture");
   return {
     venture: ventureIdx >= 0 ? args[ventureIdx + 1] : null,
     apply: args.includes("--apply"),
+    backlog: args.includes("--backlog"),
   };
+}
+
+async function runBacklogFk(venture: string, apply: boolean) {
+  const map = BACKLOG_FK[venture];
+  if (!map) { console.error(`no BACKLOG_FK mapping for ${venture}`); process.exit(1); }
+  const files = (await readdir(BACKLOG_ROOT)).filter((f) => f.startsWith("task-") && f.endsWith(".md"));
+  const byId: Record<string, string> = {};
+  for (const f of files) {
+    const data = matter(await readFile(join(BACKLOG_ROOT, f), "utf-8")).data as any;
+    if (data?.id != null) byId[String(data.id)] = f;
+  }
+  const lines: string[] = [];
+  const log = (s = "") => { lines.push(s); console.log(s); };
+  log(`# BCRG backlog FK backfill — ${apply ? "APPLY" : "DRY-RUN"}`);
+  log(`${Object.keys(map).length} tasks mapped\n`);
+  let ok = 0, bad = 0;
+  for (const [taskId, parentId] of Object.entries(map)) {
+    const ptype = parentTypeOf(parentId);
+    if (!fkTargetExists(parentId)) { log(`  ✗ task ${taskId}: FK target ${parentId} does NOT resolve — SKIP`); bad++; continue; }
+    const file = byId[taskId];
+    if (!file) { log(`  ✗ task ${taskId}: backlog file not found — SKIP`); bad++; continue; }
+    const path = join(BACKLOG_ROOT, file);
+    const before = await readFile(path, "utf-8");
+    const { content, status } = insertFk(before, parentId, ptype);
+    log(`  ${status === "inserted" ? "✓" : "·"} task ${taskId} → ${parentId} (${ptype}) [${status}]`);
+    if (apply && status === "inserted") await writeFile(path, content, "utf-8");
+    if (status === "inserted") ok++;
+  }
+  log(`\n${ok} ${apply ? "written" : "to-insert"} · ${bad} unresolved`);
+  const date = new Date().toISOString().slice(0, 10);
+  const dir = join(VENTURES_ROOT, "_migration", date);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${venture}-backlog-fk-${apply ? "apply" : "dryrun"}.md`), lines.join("\n"));
 }
 
 async function loadVentureFm(venture: string): Promise<any | null> {
@@ -167,9 +246,14 @@ async function proposeBacklogFks(venture: string): Promise<{ id: string; title: 
 }
 
 async function main() {
-  const { venture, apply } = parseArgs();
+  const { venture, apply, backlog } = parseArgs();
+  if (backlog) {
+    if (!venture) { console.error("usage: --venture <slug> --backlog [--apply]"); process.exit(1); }
+    await runBacklogFk(venture, apply);
+    return;
+  }
   if (!venture || !PLANS[venture]) {
-    console.error(`usage: bun run scripts/migrate-fractal.ts --venture <slug> [--apply]`);
+    console.error(`usage: bun run scripts/migrate-fractal.ts --venture <slug> [--apply|--backlog]`);
     console.error(`known plans: ${Object.keys(PLANS).join(", ")}`);
     process.exit(1);
   }
