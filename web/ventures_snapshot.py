@@ -126,19 +126,28 @@ def append(path: Path, row: dict[str, Any]) -> None:
 
 
 def ensure_today(path, ventures_root, backlog_dir, today: date) -> dict[str, Any]:
-    """Idempotent: replace any existing row for `today` with a fresh compute.
+    """Idempotent: ensure exactly one row exists for `today`.
 
-    Re-running on the same day leaves exactly one row for that date. On any
-    write error the computed row is still returned (best-effort persistence).
+    Short-circuit: if a row for `today` already exists, return it WITHOUT
+    recomputing or rewriting the file. Only compute+write when today's row is
+    absent. Re-running on the same day leaves exactly one row for that date.
+    On any write error the computed row is still returned (best-effort
+    persistence).
     """
     path = Path(path)
+    iso = today.isoformat()
+    existing = load(path)
+    for r in existing:
+        if r.get("date") == iso:
+            return r
+
     row = compute(ventures_root, backlog_dir, today)
     try:
-        existing = [r for r in load(path) if r.get("date") != row["date"]]
-        existing.append(row)
+        # `existing` (loaded above) has no row for today, so just append.
+        rows = existing + [row]
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
-            for r in existing:
+            for r in rows:
                 fh.write(json.dumps(r) + "\n")
     except Exception as exc:  # noqa: BLE001
         print(f"[ventures-web] snapshot write failed: {exc}", file=sys.stderr)

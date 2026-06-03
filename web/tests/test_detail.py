@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sys
+from datetime import date
 from pathlib import Path
 HERE = Path(__file__).resolve().parent.parent
 if str(HERE) not in sys.path:
@@ -174,3 +175,93 @@ def test_backlog_cache_no_parent_id_leak(tmp_path: Path):
     (d / "t.md").write_text("---\nid: 9\ntitle: X\nstatus: To Do\npriority: low\nparent_id: bcrg.p.m\nparent_type: milestone\n---\n")
     out = ventures_backlog.tasks_for("bcrg", backlog_dir=d)
     assert out and all(not k.startswith("_") for k in out[0].keys())
+
+
+# --- VenturesAccessor parse-cache regression tests (perf bug fix) ----------
+import ventures_accessor  # noqa: E402
+
+
+def _mk_ventures(tmp_path: Path) -> Path:
+    vroot = tmp_path / "ventures"
+    (vroot / "active").mkdir(parents=True)
+    (vroot / "exploring").mkdir(parents=True)
+    (vroot / "active" / "alpha.md").write_text(
+        "---\nid: alpha\ntitle: Alpha\nstage: active\npriority: high\n"
+        "deadlines:\n  - date: \"2026-01-01\"\n    label: old\n    type: hard\n---\nbody\n"
+    )
+    (vroot / "exploring" / "beta.md").write_text(
+        "---\nid: beta\ntitle: Beta\nstage: exploring\npriority: low\n---\nbody\n"
+    )
+    return vroot
+
+
+def test_detail_does_not_reparse_on_repeated_calls(tmp_path: Path, monkeypatch):
+    """After the first parse pass, repeated list()/detail() calls trigger NO
+    further _parse calls while the mtime-signature is unchanged."""
+    vroot = _mk_ventures(tmp_path)
+    acc = ventures_accessor.VenturesAccessor(data_root=vroot, today=date(2026, 6, 1))
+
+    parse_calls = {"n": 0}
+    orig_parse = acc._parse
+
+    def counting_parse(lifecycle, md):
+        parse_calls["n"] += 1
+        return orig_parse(lifecycle, md)
+
+    monkeypatch.setattr(acc, "_parse", counting_parse)
+
+    # first call parses each file exactly once (2 files)
+    acc.list({})
+    assert parse_calls["n"] == 2
+
+    # subsequent calls must NOT re-parse (signature unchanged)
+    for _ in range(10):
+        acc.detail("alpha")
+        acc.detail("beta")
+        acc.list({})
+        acc.stats()
+    assert parse_calls["n"] == 2  # still only the original pass
+
+
+def test_detail_returns_correct_record_from_cache(tmp_path: Path):
+    vroot = _mk_ventures(tmp_path)
+    acc = ventures_accessor.VenturesAccessor(data_root=vroot, today=date(2026, 6, 1))
+    acc.list({})  # warm cache
+    d = acc.detail("alpha")
+    assert d["title"] == "Alpha"
+    assert d["lifecycle"] == "active"
+    assert d["overdue_count"] == 1
+    # internal _-prefixed keys stripped at the boundary
+    assert all(not k.startswith("_") for k in d.keys())
+    assert acc.detail("nope") == {"error": "not found", "slug": "nope"}
+
+
+def test_accessor_cache_invalidates_on_mtime_change(tmp_path: Path, monkeypatch):
+    """Touching a fixture file changes the signature -> next call re-parses."""
+    vroot = _mk_ventures(tmp_path)
+    acc = ventures_accessor.VenturesAccessor(data_root=vroot, today=date(2026, 6, 1))
+
+    parse_calls = {"n": 0}
+    orig_parse = acc._parse
+
+    def counting_parse(lifecycle, md):
+        parse_calls["n"] += 1
+        return orig_parse(lifecycle, md)
+
+    monkeypatch.setattr(acc, "_parse", counting_parse)
+
+    acc.list({})
+    assert parse_calls["n"] == 2
+
+    # mutate a file's content + bump mtime
+    import os
+    f = vroot / "exploring" / "beta.md"
+    f.write_text(
+        "---\nid: beta\ntitle: Beta RENAMED\nstage: exploring\npriority: low\n---\nbody\n"
+    )
+    os.utime(f, ns=(2_000_000_000_000_000_000, 2_000_000_000_000_000_000))
+
+    # next call re-parses (signature changed) and reflects the new content
+    out = acc.detail("beta")
+    assert out["title"] == "Beta RENAMED"
+    assert parse_calls["n"] == 4  # full re-parse pass of both files

@@ -146,6 +146,57 @@ def test_load_missing_path(tmp_path: Path):
     assert ventures_snapshot.load(tmp_path / "nope" / "snapshots.jsonl") == []
 
 
+def test_ensure_today_skips_compute_when_row_exists(tmp_path: Path, monkeypatch):
+    """If today's row already exists, ensure_today must NOT call compute()
+    (the redundant full recompute that caused the /api/trends slowdown)."""
+    vroot, bl = _make_store(tmp_path)
+    today = date(2026, 6, 1)
+    path = tmp_path / "metrics" / "snapshots.jsonl"
+
+    calls = {"n": 0}
+    orig_compute = ventures_snapshot.compute
+
+    def counting_compute(*a, **k):
+        calls["n"] += 1
+        return orig_compute(*a, **k)
+
+    monkeypatch.setattr(ventures_snapshot, "compute", counting_compute)
+
+    # first call: row absent -> must compute once and write
+    r1 = ventures_snapshot.ensure_today(path, vroot, bl, today)
+    assert calls["n"] == 1
+    assert r1["date"] == "2026-06-01"
+    mtime_after_first = path.stat().st_mtime_ns
+
+    # second call same day: row present -> NO compute, NO rewrite
+    r2 = ventures_snapshot.ensure_today(path, vroot, bl, today)
+    assert calls["n"] == 1  # unchanged: compute not invoked again
+    assert r2 == r1
+    assert path.stat().st_mtime_ns == mtime_after_first  # file untouched
+    assert len(ventures_snapshot.load(path)) == 1  # idempotency holds
+
+
+def test_ensure_today_computes_when_row_absent(tmp_path: Path, monkeypatch):
+    """A different date must trigger compute and add exactly one row."""
+    vroot, bl = _make_store(tmp_path)
+    path = tmp_path / "metrics" / "snapshots.jsonl"
+
+    calls = {"n": 0}
+    orig_compute = ventures_snapshot.compute
+
+    def counting_compute(*a, **k):
+        calls["n"] += 1
+        return orig_compute(*a, **k)
+
+    monkeypatch.setattr(ventures_snapshot, "compute", counting_compute)
+
+    ventures_snapshot.ensure_today(path, vroot, bl, date(2026, 6, 1))
+    ventures_snapshot.ensure_today(path, vroot, bl, date(2026, 6, 2))
+    assert calls["n"] == 2  # one compute per distinct date
+    rows = ventures_snapshot.load(path)
+    assert sorted(r["date"] for r in rows) == ["2026-06-01", "2026-06-02"]
+
+
 def test_append_creates_parents(tmp_path: Path):
     path = tmp_path / "a" / "b" / "snapshots.jsonl"
     ventures_snapshot.append(path, {"date": "2026-06-01", "ventures_total": 1})
