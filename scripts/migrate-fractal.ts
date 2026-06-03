@@ -70,6 +70,75 @@ interface VenturePlan {
 // NOTE: completed items map to `harvesting` — the 6-state vocab has no terminal
 // "done" (Phase 0 §10.7, Shawn override). Flagged in the report as a revisit item.
 const PLANS: Record<string, VenturePlan> = {
+  "indigenomics-ai": {
+    venture: "indigenomics-ai",
+    projects: [
+      {
+        slug: "telus-activation",
+        name: "TELUS Activation — 6-month engagement",
+        stage: "active", priority: "high", owner: "shawn",
+        stakeholders: ["carol-anne-hilton", "tanya", "andrea", "roshan"],
+        note: "Core 6-month TELUS contract delivery. Weekly activation sprint (Feb–Apr) + midpoint + renewal.",
+        milestones: [
+          { slug: "week1-handoff", name: "Week 1: K handoff + consolidation (Feb 26–Mar 4)", stage: "harvesting", priority: "high", target: "Handoff + consolidation complete", from: "ms-week1-handoff" },
+          { slug: "week2-pipeline", name: "Week 2: Data pipeline + governance gate (Mar 5–11)", stage: "harvesting", priority: "high", target: "Pipeline + governance gate", from: "ms-week2-pipeline" },
+          { slug: "week3-methodology", name: "Week 3: Methodology + data processing (Mar 12–18)", stage: "harvesting", priority: "high", target: "Methodology + processing", from: "ms-week3-methodology" },
+          { slug: "week4-5-validation", name: "Weeks 4-5: Validation runs + iteration (Mar 19–Apr 1)", stage: "harvesting", priority: "high", target: "Validation runs + iteration", from: "ms-week4-5-validation" },
+          { slug: "week6-review", name: "Week 6: Carol Anne quality review (Apr 2–8)", stage: "harvesting", priority: "high", target: "Carol Anne quality review", from: "ms-week6-review" },
+          { slug: "week7-launch", name: "Week 7: Final prep + launch (Apr 9–12)", stage: "harvesting", priority: "high", target: "Final prep + launch", from: "ms-week7-launch" },
+          { slug: "victoria-demo", name: "Phase 4.5 Victoria in-person demo (Apr 17)", stage: "harvesting", priority: "medium", target: "In-person demo delivered", from: "ms-victoria-demo" },
+          { slug: "midpoint-touchbase", name: "TELUS Midpoint Touch Base (May 8)", stage: "harvesting", priority: "medium", target: "Midpoint touch base held", from: "ms-midpoint-touchbase" },
+          { slug: "midpoint-report", name: "Joint midpoint report co-signed", stage: "active", priority: "high", target: "Indigenomics + TELUS mutual sign-off (OVERDUE, TELUS doc pending)", deadline: "2026-06-01", from: "ms-midpoint-report" },
+          { slug: "engagement-renewal", name: "TELUS engagement continuation past 6-month window", stage: "active", priority: "high", target: "Renewal decision", deadline: "2026-08-20", from: "ms-engagement-renewal" },
+        ],
+      },
+      {
+        slug: "gateway",
+        name: "Indigenomics AI Gateway + Reliability (Phase 5a)",
+        stage: "active", priority: "high", owner: "shawn",
+        note: "Gateway prototype + reliability engineering foundations. TELUS AI Factory, conversational models, sovereign-compute.",
+        milestones: [
+          { slug: "phase-5a-prototype", name: "Phase 5a Gateway prototype + reliability foundations", stage: "active", priority: "high", target: "Gateway v0 + reliability engineering substrate", from: "ms-phase-5a-prototype" },
+        ],
+      },
+      {
+        slug: "neu-capstone",
+        name: "Northeastern University CS Capstone",
+        stage: "active", priority: "medium", owner: "shawn",
+        note: "Indigenomics Education Platform. Kickoff Jun 1, showcase Aug 10.",
+        milestones: [
+          { slug: "capstone", name: "NEU CS Capstone — Education Platform", stage: "active", priority: "medium", target: "Kickoff Jun 1 → showcase Aug 10", deadline: "2026-08-10", from: "ms-neu-capstone" },
+        ],
+      },
+      {
+        slug: "creator-jam",
+        name: "Indigenomics Creator Tech Jam",
+        stage: "harvesting", priority: "low", owner: "shawn",
+        note: "Virtual + Vancouver + Victoria, May 21–26. Complete.",
+        milestones: [
+          { slug: "jam-complete", name: "Creator Tech Jam delivered (May 21–26)", stage: "harvesting", priority: "low", target: "Jam delivered across 3 venues", from: "ms-creator-jam" },
+        ],
+      },
+      {
+        slug: "impact-summit",
+        name: "Indigenomics IMPACT Summit",
+        stage: "active", priority: "medium", owner: "shawn",
+        note: "IMPACT Summit, Sept 26.",
+        milestones: [
+          { slug: "summit-2026", name: "IMPACT Summit 2026 (Sept 26)", stage: "active", priority: "medium", target: "Summit delivered", deadline: "2026-09-26", from: "ms-impact-2026" },
+        ],
+      },
+      {
+        slug: "indian-act-survey",
+        name: "National Indian Act Economic Survey",
+        stage: "active", priority: "medium", owner: "shawn",
+        note: "150 years of the Indian Act. Survey launch (was Apr 12 — overdue).",
+        milestones: [
+          { slug: "survey-launch", name: "National Indian Act Economic Survey launch", stage: "active", priority: "medium", target: "Survey launched", deadline: "2026-04-12" },
+        ],
+      },
+    ],
+  },
   bcrg: {
     venture: "bcrg",
     projects: [
@@ -138,6 +207,18 @@ const PLANS: Record<string, VenturePlan> = {
 // (as it appears in frontmatter `id:`), value = composite parent slug.
 // parent_type is derived from dot-depth: 0=venture, 1=project, 2=milestone.
 const BACKLOG_FK: Record<string, Record<string, string>> = {
+  "indigenomics-ai": {
+    "task-012": "indigenomics-ai.telus-activation",
+    "task-026": "indigenomics-ai",
+    "task-028": "indigenomics-ai",
+    "task-171": "indigenomics-ai",
+    "443": "indigenomics-ai.gateway.phase-5a-prototype",
+    "485": "indigenomics-ai.gateway",
+    "539": "indigenomics-ai.gateway",
+    "540": "indigenomics-ai.telus-activation",
+    "547": "indigenomics-ai.neu-capstone.capstone",
+    "558": "indigenomics-ai.gateway.phase-5a-prototype",
+  },
   bcrg: {
     "429": "bcrg.avalanche-phase2.m1-data-kickoff",
     "task-025": "bcrg",
