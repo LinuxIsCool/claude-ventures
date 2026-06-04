@@ -70,6 +70,23 @@ interface VenturePlan {
 // NOTE: completed items map to `harvesting` — the 6-state vocab has no terminal
 // "done" (Phase 0 §10.7, Shawn override). Flagged in the report as a revisit item.
 const PLANS: Record<string, VenturePlan> = {
+  "regen-ai": {
+    venture: "regen-ai",
+    projects: [
+      { slug: "claims-engine", name: "Claims Engine", stage: "active", priority: "high", owner: "shawn", stakeholders: ["samu", "gregory-landua", "brandon"], note: "Regen claims engine.", milestones: [
+        { slug: "claims-engine-v1", name: "Claims Engine V1", stage: "active", priority: "high", target: "V1 shipped", from: "ms-claims-engine" } ] },
+      { slug: "registry-agent", name: "Registry Review Agent (RA)", stage: "active", priority: "high", owner: "shawn", stakeholders: ["brandon", "gregory-landua"], note: "Registry Review MCP / RA agent.", milestones: [
+        { slug: "registry-mcp", name: "Registry Review MCP (RA Agent)", stage: "active", priority: "high", target: "MCP in marketplace", from: "ms-registry-agent" } ] },
+      { slug: "methodology-agent", name: "Methodology Evaluation Agent", stage: "active", priority: "medium", owner: "shawn", stakeholders: ["gregory-landua"], note: "Methodology evaluation agent.", milestones: [
+        { slug: "methodology-eval", name: "Methodology Evaluation Agent", stage: "active", priority: "medium", target: "Eval agent operational", from: "ms-methodology-agent" } ] },
+      { slug: "protocol-politicians", name: "Protocol Politicians (9 Governance Agents)", stage: "active", priority: "medium", owner: "shawn", stakeholders: ["gregory-landua"], note: "9 governance agents. TACO/PACTO framework.", milestones: [
+        { slug: "governance-agents", name: "Protocol Politicians — 9 governance agents", stage: "active", priority: "medium", target: "9 agents operational", from: "ms-protocol-politicians" } ] },
+      { slug: "regen-app", name: "Regen App (Rolls) — Platform MVP", stage: "active", priority: "high", owner: "shawn", stakeholders: ["dave", "becca", "gregory-landua"], note: "Platform MVP (Rolls).", milestones: [
+        { slug: "rolls-mvp", name: "Regen App (Rolls) Platform MVP", stage: "active", priority: "high", target: "MVP shipped", from: "ms-regen-app" } ] },
+      { slug: "knowledge-commons", name: "Regen Knowledge Commons", stage: "exploring", priority: "low", owner: "shawn", stakeholders: ["becca", "gregory-landua"], note: "Knowledge commons — designed, not yet built.", milestones: [
+        { slug: "commons-v1", name: "Regen Knowledge Commons v1", stage: "exploring", priority: "low", target: "Commons v1", from: "ms-knowledge-commons" } ] },
+    ],
+  },
   "indigenomics-ai": {
     venture: "indigenomics-ai",
     projects: [
@@ -207,6 +224,11 @@ const PLANS: Record<string, VenturePlan> = {
 // (as it appears in frontmatter `id:`), value = composite parent slug.
 // parent_type is derived from dot-depth: 0=venture, 1=project, 2=milestone.
 const BACKLOG_FK: Record<string, Record<string, string>> = {
+  "regen-ai": {
+    "task-086": "regen-ai",
+    "432": "regen-ai.registry-agent.registry-mcp",
+    "448": "regen-ai.claims-engine.claims-engine-v1",
+  },
   "indigenomics-ai": {
     "task-012": "indigenomics-ai.telus-activation",
     "task-026": "indigenomics-ai",
