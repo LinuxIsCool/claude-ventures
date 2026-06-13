@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIE Workspace</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='50%' y='52' font-size='52' text-anchor='middle'>%F0%9F%97%82%EF%B8%8F</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        fontFamily: {
+          pixel: ['"Press Start 2P"', 'monospace'],
+          mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        },
+        colors: {
+          surface: { DEFAULT: '#0f0f17', card: '#161622', border: '#2a2a3e', raised: '#1e1e30' },
+          accent: { green: '#a6e3a1', blue: '#89b4fa', red: '#f38ba8', yellow: '#f9e2af', purple: '#cba6f7', pink: '#f5c2e7', teal: '#94e2d5' },
+        },
+        animation: { 'fade-in': 'fade-in 0.2s ease-out' },
+        keyframes: { 'fade-in': { from: { opacity: 0, transform: 'translateY(5px)' }, to: { opacity: 1, transform: 'translateY(0)' } } },
+      } }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: dark; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #0f0f17; color: #cdd6f4; }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #0f0f17; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 4px; }
+    button, input, select, a { transition: all .15s ease; }
+    .nav-tab:hover { transform: translateY(-1px); border-color: #89b4fa66; color: #89b4fa; }
+    .nav-tab.active { border-color: #a6e3a166; color: #a6e3a1; background: #a6e3a111; }
+    .card-row { transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+    .card-row:hover { transform: translateX(3px); background: #1e1e30; border-color: #89b4fa55; }
+    .card-row.selected { background: #a6e3a10d; border-color: #a6e3a166; }
+    .thumb { background: radial-gradient(circle at 30% 20%, #2a2a3e, #161622 55%, #0f0f17); }
+    .badge { border: 1px solid #2a2a3e; background: #0f0f17; color: #bac2de; }
+    .metric-card:hover { border-color: #89b4fa66; transform: translateY(-1px); }
+    .input { background:#0f0f17; border:1px solid #2a2a3e; border-radius:8px; padding:8px 12px; color:#cdd6f4; font-size:13px; outline:none; }
+    .input:focus { border-color:#89b4fa66; }
+    mark { background:#f9e2af33; color:#f9e2af; border-radius:3px; padding:0 2px; }
+    .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .line-clamp-3 { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+  <header class="w-full max-w-[1800px] mx-auto px-5 2xl:px-6 pt-6 pb-4">
+    <div class="flex items-start justify-between gap-6 flex-wrap">
+      <div>
+        <h1 class="font-pixel text-accent-green text-lg tracking-wider" id="ws-title">CIE WORKSPACE</h1>
+        <p class="font-mono text-sm text-gray-500 mt-2" id="ws-sub">Venture workspace over the card graph</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <input id="global-search" class="input w-64" placeholder="search this view…" autocomplete="off">
+        <select id="sort" class="input"></select>
+        <div class="rounded-lg border border-surface-border bg-surface-card px-3 py-2 min-w-40">
+          <div class="font-mono text-[10px] text-gray-600 uppercase tracking-wider">Graph</div>
+          <div id="header-counts" class="font-mono text-xs text-gray-400 mt-1">Loading</div>
+        </div>
+        <div class="rounded-lg border border-surface-border bg-surface-card px-3 py-2 min-w-28">
+          <div class="font-mono text-[10px] text-gray-600 uppercase tracking-wider">Mode</div>
+          <div class="font-mono text-xs text-accent-blue mt-1">Read-only</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="w-full max-w-[1800px] mx-auto px-5 2xl:px-6 pb-8 grid grid-cols-1 xl:grid-cols-12 gap-5 2xl:gap-6">
+    <aside class="xl:col-span-2 min-w-0">
+      <div class="sticky top-6 space-y-4">
+        <nav id="nav" class="rounded-xl border border-surface-border bg-surface-card p-2 space-y-1.5"></nav>
+      </div>
+    </aside>
+    <section class="xl:col-span-7 min-w-0">
+      <div id="view-root" class="animate-fade-in"></div>
+    </section>
+    <aside class="xl:col-span-3 min-w-0">
+      <div class="sticky top-6 space-y-4">
+        <section id="detail-panel" class="rounded-xl border border-surface-border bg-surface-card overflow-hidden">
+          <div class="p-4 border-b border-surface-border flex items-center justify-between">
+            <h2 class="font-pixel text-accent-purple text-[10px] tracking-wider">DETAILS</h2>
+            <span id="detail-context" class="font-mono text-[10px] text-gray-600">Workspace</span>
+          </div>
+          <div id="detail-body" class="p-4 font-mono text-sm text-gray-500">Select a card to inspect it.</div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <script src="../static/embedded-bar.js"></script>
+  <script src="../static/vendor/d3.v7.min.js"></script>
+  <script>
+  // ---------- config ----------
+  const VIEWS = [
+    { key:"about",      label:"About" },
+    { key:"overview",   label:"Overview" },
+    { key:"cards",      label:"Cards" },
+    { key:"meetings",   label:"Meetings",   ctype:"transcript" },
+    { key:"decisions",  label:"Decisions",  ctype:"decision" },
+    { key:"concepts",   label:"Concepts",   ctype:"concept" },
+    { key:"actions",    label:"Actions",    ctype:"action_item" },
+    { key:"people",     label:"People" },
+    { key:"incidence",  label:"Incidence" },
+    { key:"backlog",    label:"Backlog" },
+    { key:"milestones", label:"Milestones" },
+    { key:"project",    label:"Project" },
+    { key:"finance",    label:"Finance" },
+    { key:"journal",    label:"Journal" },
+    { key:"resources",  label:"Resources" },
+  ];
+  const GLYPH = { transcript:"🎙", decision:"⚖", concept:"💡", action_item:"✓",
+                  task:"☑", journal:"📓", repo:"⌥", doc:"📄", link:"🔗",
+                  milestone:"◆", person:"👤", resource:"🔗" };
+  const TYPE_COLOR = { transcript:"#89b4fa", decision:"#f9e2af", concept:"#cba6f7",
+                       action_item:"#a6e3a1", task:"#a6e3a1", journal:"#94e2d5",
+                       repo:"#fab387", doc:"#89dceb", link:"#7f849c", milestone:"#f9e2af",
+                       person:"#f5c2e7", resource:"#7f849c" };
+  // Provenance trust tiers (Phase 0, task-4101). Coarse, not a fake 0-1 score.
+  const TIER = {
+    curated:    { label:"✓ curated",    color:"#a6e3a1" },
+    inferred:   { label:"~ inferred",   color:"#89b4fa" },
+    unverified: { label:"? unverified", color:"#f9e2af" },
+  };
+  function tierBadge(t){ const x=TIER[t]||TIER.inferred;
+    return `<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]" title="provenance: ${esc(t||'inferred')}" style="border-color:${x.color}55;color:${x.color}">${x.label}</span>`; }
+  function provBlock(p){
+    if(!p) return '';
+    const row=(k,v)=>v?`<div class="flex gap-2"><span class="text-gray-600" style="min-width:84px">${esc(k)}</span><span class="text-gray-300 break-all">${esc(v)}</span></div>`:'';
+    const body = row('source', p.source_type) + row('extracted by', p.extracted_by) + row('lens', p.lens)
+      + row('extracted at', fmtDate(p.extracted_at)) + row('verified by', p.verified_by||'—');
+    if(!body) return '';
+    return `<div class="rounded-lg border border-surface-border bg-surface p-3 mb-4 font-mono text-[10px] space-y-0.5">
+      <div class="text-accent-purple uppercase tracking-wider mb-1">Provenance</div>${body}</div>`;
+  }
+  const SORTS = {
+    cards: [["created_desc","newest"],["created_asc","oldest"],["title_az","title A→Z"],["xp_desc","xp ↓"]],
+    backlog: [["prio","priority"],["due","due date"],["title_az","title A→Z"]],
+    people: [["count_desc","most active"],["name_az","name A→Z"]],
+    journal: [["created_desc","newest"],["title_az","title A→Z"]],
+    resources: [["type","type"],["title_az","title A→Z"]],
+    plain: [],
+  };
+  const state = { view:"overview", q:"", sort:"created_desc", selected:"", counts:{},
+                  cardsSub:"cards", cardsType:"all" };
+
+  // ---------- helpers ----------
+  function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function attr(s){ return esc(s).replace(/'/g,'&#39;'); }
+  function apiPath(p){ return p.replace(/^\//,''); }
+  async function api(p){ const r=await fetch(apiPath(p)); if(!r.ok) throw new Error(p+' -> '+r.status); return r.json(); }
+  const glyph = t => GLYPH[t]||"▦";
+  const tcolor = t => TYPE_COLOR[t]||"#7f849c";
+  const prioDot = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[String(p).toLowerCase()]||'#7f849c');
+  const fmtDate = s => { if(!s) return ""; const m=/^(\d{4}-\d{2}-\d{2})/.exec(String(s)); return m?m[1]:String(s).slice(0,10); };
+  function highlight(text){ if(!state.q) return esc(text); const q=state.q.trim(); if(!q) return esc(text);
+    try{ return esc(text).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>'); }catch(e){ return esc(text); } }
+  function sortKind(view){
+    if(view==="cards") return state.cardsSub==="cards" ? "cards" : "plain";
+    if(["meetings","decisions","concepts","actions"].includes(view)) return "cards";
+    return SORTS[view]?view:"plain";
+  }
+  function applySort(items){ const s=state.sort, by=f=>items.slice().sort(f), t=x=>String(x.title||"").toLowerCase();
+    if(s==="created_desc") return by((a,b)=>String(b.created||"").localeCompare(String(a.created||"")));
+    if(s==="created_asc")  return by((a,b)=>String(a.created||"").localeCompare(String(b.created||"")));
+    if(s==="title_az")     return by((a,b)=>t(a).localeCompare(t(b)));
+    if(s==="xp_desc")      return by((a,b)=>(b.xp||0)-(a.xp||0));
+    if(s==="name_az")      return by((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
+    if(s==="count_desc")   return by((a,b)=>(b.count||0)-(a.count||0));
+    if(s==="due")          return by((a,b)=>String(a.due||"9999").localeCompare(String(b.due||"9999")));
+    if(s==="type")         return by((a,b)=>String(a.type||"").localeCompare(String(b.type||"")));
+    if(s==="prio"){ const r={critical:0,high:1,medium:2,low:3}; return by((a,b)=>(r[String(a.priority).toLowerCase()]??9)-(r[String(b.priority).toLowerCase()]??9)); }
+    return items;
+  }
+  function filterQ(items, fields){ if(!state.q) return items; const q=state.q.toLowerCase();
+    return items.filter(it=>fields.some(f=>{ const v=it[f]; if(Array.isArray(v)) return v.join(" ").toLowerCase().includes(q); return String(v||"").toLowerCase().includes(q); })); }
+
+  // ---------- thumbnail tile (cards have no image yet → type glyph tile) ----------
+  function thumb(type, cls='w-32 h-[72px]'){
+    return `<div class="${cls} rounded thumb flex items-center justify-center" style="color:${tcolor(type)};font-size:1.5rem">${glyph(type)}</div>`;
+  }
+
+  // ---------- card row (clone of youtube videoRow) ----------
+  function cardRow(it){
+    const sel = state.selected===it.slug ? ' selected' : '';
+    const tags = (it.tags||[]).slice(0,6).map(t=>`<span class="badge inline-block rounded-full px-2 py-0.5 font-mono text-[10px]">#${esc(t)}</span>`).join('');
+    const xp = it.xp!=null ? `<span class="badge inline-block rounded-full px-2 py-0.5 font-mono text-[10px]">L${esc(it.level||'?')} · ${esc(it.xp)}xp</span>` : '';
+    const ppl = (it.participants||[]).length ? ` <span class="text-gray-700">/</span> ${esc(it.participants.length)} ppl` : '';
+    return `<article class="card-row${sel} p-3 border-b border-surface-border/70 cursor-pointer" data-card="${esc(it.slug)}">
+      <div class="flex gap-4">
+        <div class="flex-shrink-0">${thumb(it.type)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span style="width:8px;height:8px;border-radius:50%;flex:none;background:${prioDot(it.priority)}"></span>
+            <span class="badge inline-block rounded-full px-2 py-0.5 font-mono text-[10px]" style="border-color:${tcolor(it.type)}55;color:${tcolor(it.type)}">${esc(it.type)}</span>
+            ${tierBadge(it.tier)}
+            <span class="font-mono text-[10px] text-gray-600 ml-auto">${esc(fmtDate(it.created))}</span>
+          </div>
+          <div class="font-mono font-semibold text-sm text-gray-100 line-clamp-2 leading-6 mt-1">${highlight(it.title||it.slug)}</div>
+          <div class="font-mono text-[11px] text-gray-500 mt-1 line-clamp-2">${highlight(it.summary||"")}</div>
+          <div class="mt-2 flex flex-wrap gap-1.5">${tags}${xp}</div>
+        </div>
+      </div>
+    </article>`;
+  }
+  function listShell(rowsHtml){
+    return `<div class="rounded-xl border border-surface-border bg-surface-card overflow-hidden"><div class="divide-y divide-surface-border/70">${rowsHtml}</div></div>`;
+  }
+  function emptySlice(msg){ return `<div class="p-6 font-mono text-sm text-gray-600">${esc(msg)}</div>`; }
+  function sectionTitle(title, sub=''){
+    return `<div class="mb-5 flex items-end justify-between gap-4"><div>
+      <h2 class="font-pixel text-accent-green text-sm tracking-wider">${esc(title)}</h2>
+      ${sub?`<p class="font-mono text-sm text-gray-500 mt-2 leading-6">${esc(sub)}</p>`:''}</div>
+      <span class="font-mono text-[11px] text-gray-600" id="view-count"></span></div>`;
+  }
+  function setCount(n){ const el=document.getElementById('view-count'); if(el) el.textContent = (n!=null)?`${n} items`:''; }
+
+  // ---------- nav + sort ----------
+  function renderNav(){
+    const nav=document.getElementById('nav');
+    nav.innerHTML = VIEWS.map(v=>{
+      const c=state.counts[v.key]; const cnt=(c==null)?'':`<span class="float-right text-gray-600">${c}</span>`;
+      return `<button data-view="${v.key}" class="nav-tab ${state.view===v.key?'active':''} w-full text-left rounded-lg border border-transparent px-3 py-2.5 font-mono text-xs">${esc(v.label)}${cnt}</button>`;
+    }).join('');
+    nav.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  }
+  function renderSort(){
+    const sel=document.getElementById('sort'); const opts=SORTS[sortKind(state.view)]||[];
+    if(!opts.length){ sel.style.display='none'; return; } sel.style.display='';
+    if(!opts.some(o=>o[0]===state.sort)) state.sort=opts[0][0];
+    sel.innerHTML=opts.map(([v,l])=>`<option value="${v}" ${state.sort===v?'selected':''}>sort: ${esc(l)}</option>`).join('');
+    sel.onchange=()=>{ state.sort=sel.value; render(); };
+  }
+
+  // ---------- views ----------
+  async function viewCards(ctype, label){
+    const root=document.getElementById('view-root');
+    let items=(await api('/api/list')).filter(i=>i.type===ctype);
+    state.counts[state.view]=items.length; renderNav();
+    items=applySort(filterQ(items,["title","summary","tags"]));
+    root.innerHTML = sectionTitle(label) + (items.length?listShell(items.map(cardRow).join('')):emptySlice(`No ${label.toLowerCase()} yet.`));
+    setCount(items.length);
+  }
+  async function viewAbout(){
+    const root=document.getElementById('view-root');
+    const v=await api('/api/venture');
+    if(v.error){ root.innerHTML=sectionTitle('ABOUT')+emptySlice(v.error); return; }
+    // header title reflects the venture
+    if(v.title){ document.getElementById('ws-title').textContent=String(v.title).toUpperCase();
+      document.getElementById('ws-sub').textContent=`${v.stage||''}${v.priority?' · '+v.priority:''}`; }
+    const ms=(v.milestones||[]).slice(0,5), dl=(v.deadlines||[]).slice(0,5);
+    const links=Object.entries(v.links||{});
+    const team=v.co_venturers||[];
+    const f=v.financial||{};
+    const more=(label,view)=>`<button data-goview="${view}" class="badge rounded-full px-3 py-1 font-mono text-[10px] text-accent-blue" style="border-color:#89b4fa55">${esc(label)} →</button>`;
+    const msHtml = ms.length ? ms.map(m=>`<div class="font-mono text-xs flex items-center gap-2 py-0.5"><span style="color:#f9e2af">◆</span><span class="flex-1 ${/(complete|done)/i.test(m.status||'')?'line-through text-gray-600':'text-gray-200'}">${esc(m.title||m.label||'')}</span><span class="text-gray-600">${esc(m.date||m.status||'')}</span></div>`).join('') : '<div class="font-mono text-xs text-gray-600">none</div>';
+    const dlHtml = dl.length ? dl.map(d=>`<div class="font-mono text-xs flex items-center gap-2 py-0.5"><span style="color:${d.overdue?'#f38ba8':'#fab387'}">⚑</span><span class="flex-1 text-gray-200">${esc(d.label||d.description||'')}</span><span class="${d.overdue?'text-accent-red':'text-gray-600'}">${esc(d.date||'')}</span></div>`).join('') : '<div class="font-mono text-xs text-gray-600">none</div>';
+    const card=(title,extra,body)=>`<section class="rounded-xl border border-surface-border bg-surface-card p-4">
+      <div class="flex items-center gap-2 mb-3"><h3 class="font-pixel text-accent-purple text-[10px] tracking-wider">${esc(title)}</h3><span class="ml-auto">${extra||''}</span></div>${body}</section>`;
+    root.innerHTML = sectionTitle('ABOUT', 'Curated venture facts — authored, authoritative. The emergent signal lives in the other views.') +
+      `<div class="rounded-xl border border-surface-border bg-surface-card p-5 mb-4">
+         <div class="font-mono text-sm text-gray-300 leading-6">${esc(v.description||'')}</div>
+       </div>
+       <div class="grid gap-4" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+         ${card('Milestones', more('all','milestones'), msHtml)}
+         ${card('Deadlines', more('all','milestones'), dlHtml)}
+         ${card('Financial', more('detail','finance'),
+            `<div class="font-mono text-xs space-y-1 text-gray-200">
+               <div>revenue to date: <span class="text-accent-green">${esc(f.revenue_to_date??'—')} ${esc(f.currency||'')}</span></div>
+               <div>cap / budget: ${esc(f.cap??f.budget??'—')}</div>
+               <div>invoices: ${esc((f.invoices||[]).length)}</div></div>`)}
+         ${card('Team', null, team.length?team.map(c=>`<div class="font-mono text-xs text-gray-200 py-0.5">${esc(c.name)} <span class="text-gray-600">— ${esc(c.role||'')}</span></div>`).join(''):'<div class="font-mono text-xs text-gray-600">none</div>')}
+         ${card('Links & Resources', more('all','resources'),
+            links.length?links.map(([k,u])=>`<div class="font-mono text-xs py-0.5">${/^https?:/.test(String(u))?`<a href="${esc(u)}" target="_blank" rel="noopener" class="text-accent-blue break-all">${esc(k)}</a>`:`<span class="text-gray-300">${esc(k)}</span>`}</div>`).join(''):'<div class="font-mono text-xs text-gray-600">none</div>')}
+         ${card('Workspace', null,
+            `<div class="flex flex-wrap gap-1.5">${['overview','meetings','people','incidence','backlog','journal'].map(vw=>`<button data-goview="${vw}" class="badge rounded-full px-2 py-0.5 font-mono text-[10px] text-accent-blue" style="border-color:#89b4fa44">${vw}</button>`).join('')}</div>`)}
+       </div>`;
+    setCount(null);
+  }
+  async function viewOverview(){
+    const root=document.getElementById('view-root');
+    const s=await api('/api/stats');
+    const recent=(await api('/api/list')).slice(0,6);
+    const metric=(n,l)=>`<div class="metric-card rounded-xl border border-surface-border bg-surface-card p-4 text-center transition">
+      <div class="font-pixel text-accent-purple text-lg">${esc(n)}</div><div class="font-mono text-[10px] text-gray-600 uppercase tracking-wider mt-1">${esc(l)}</div></div>`;
+    const chips=Object.entries(s.by_type||{}).map(([t,n])=>`<button data-jump="${esc(t)}" class="badge rounded-full px-3 py-1 font-mono text-xs" style="border-color:${tcolor(t)}55;color:${tcolor(t)}">${glyph(t)} ${esc(t)} · ${esc(n)}</button>`).join(' ');
+    root.innerHTML = sectionTitle('OVERVIEW','The card graph + linked venture stores at a glance.') +
+      `<div class="grid grid-cols-3 gap-3 mb-5">${metric(s.nodes,'cards')}${metric(s.edges,'links')}${metric(s.people,'people')}</div>
+       <h3 class="font-pixel text-accent-blue text-[10px] tracking-wider mb-3">CARDS BY TYPE</h3>
+       <div class="flex flex-wrap gap-2 mb-6">${chips}</div>
+       <h3 class="font-pixel text-accent-green text-[10px] tracking-wider mb-3">RECENT CARDS</h3>
+       ${listShell(recent.map(cardRow).join(''))}`;
+    root.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{ const m={transcript:'meetings',decision:'decisions',concept:'concepts',action_item:'actions'}; setView(m[b.dataset.jump]||'meetings'); });
+    setCount(null);
+  }
+  async function viewPeople(){
+    const root=document.getElementById('view-root');
+    const d=await api('/api/people'); state.counts.people=d.total; renderNav();
+    let items=applySort(filterQ(d.items,["name"]));
+    root.innerHTML = sectionTitle('PEOPLE','Participants across all cards.') + (items.length?listShell(items.map(p=>`
+      <article class="card-row p-3 border-b border-surface-border/70 cursor-pointer" data-person="${esc(p.name)}">
+        <div class="flex gap-4 items-center">
+          <div class="flex-shrink-0">${thumb('person','w-12 h-12')}</div>
+          <div class="min-w-0 flex-1"><div class="font-mono font-semibold text-sm text-gray-100">${highlight(p.name)}</div>
+            <div class="font-mono text-[11px] text-gray-500 mt-1 line-clamp-2">${p.cards.slice(0,3).map(c=>esc(c.title)).join(' <span class="text-gray-700">/</span> ')}</div></div>
+          <span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]">${esc(p.count)} cards</span>
+        </div></article>`).join('')):emptySlice('No participants captured yet.'));
+    window.__people=d.items; setCount(items.length);
+  }
+  async function viewIncidence(){
+    const root=document.getElementById('view-root');
+    const d=await api('/api/edges'); state.counts.incidence=d.links.length; renderNav();
+    const links=filterQ(d.links,["source_title","target_title","rel_type","summary"]);
+    root.innerHTML = sectionTitle('INCIDENCE',`${d.nodes.length} nodes · ${d.links.length} edges in the card graph.`) +
+      (links.length?listShell(links.map(l=>`<article class="card-row p-3 border-b border-surface-border/70">
+        <div class="flex items-center gap-2 font-mono text-xs flex-wrap">
+          <a class="text-accent-blue cursor-pointer" data-card="${esc(l.source)}">${highlight(l.source_title)}</a>
+          <span class="badge rounded-full px-2 py-0.5 text-[10px]" style="color:#cba6f7;border-color:#cba6f744">${esc(l.rel_type)}${l.strength!=null?' · '+esc(l.strength):''}</span>
+          <a class="text-accent-blue cursor-pointer" data-card="${esc(l.target)}">${highlight(l.target_title)}</a>
+        </div>${l.summary?`<div class="font-mono text-[11px] text-gray-500 mt-1">${highlight(l.summary)}</div>`:''}</article>`).join('')):emptySlice('No edges.'));
+    setCount(links.length);
+  }
+  async function viewBacklog(){
+    const root=document.getElementById('view-root');
+    const d=await api('/api/backlog'); state.counts.backlog=d.total; renderNav();
+    let items=applySort(filterQ(d.items,["title","summary","tags"]));
+    root.innerHTML = sectionTitle('BACKLOG','Tasks linked to this venture.') + (items.length?listShell(items.map(t=>`
+      <article class="card-row p-3 border-b border-surface-border/70">
+        <div class="flex items-center gap-2 font-mono text-xs">
+          <span style="width:8px;height:8px;border-radius:50%;flex:none;background:${prioDot(t.priority)}"></span>
+          <span class="text-gray-600">#${esc(t.slug)}</span><span class="flex-1 text-gray-100">${highlight(t.title)}</span>
+          <span class="badge rounded-full px-2 py-0.5 text-[10px]">${esc(t.status)}</span>
+          <span class="badge rounded-full px-2 py-0.5 text-[10px]" style="border-color:${prioDot(t.priority)}55;color:${prioDot(t.priority)}">${esc(t.priority)}</span>
+          ${t.due?`<span class="text-gray-600">${esc(t.due)}</span>`:''}
+        </div>${t.summary?`<div class="font-mono text-[11px] text-gray-500 mt-1 ml-4 line-clamp-2">${highlight(t.summary)}</div>`:''}</article>`).join('')):emptySlice('No linked backlog tasks.'));
+    setCount(items.length);
+  }
+  async function viewJournal(){
+    const root=document.getElementById('view-root');
+    const d=await api('/api/journal'); state.counts.journal=d.total; renderNav();
+    let items=applySort(filterQ(d.items,["title","summary","tags","author"]));
+    root.innerHTML = sectionTitle('JOURNAL','Entries mentioning this venture.') + (items.length?listShell(items.map(j=>`
+      <article class="card-row p-3 border-b border-surface-border/70">
+        <div class="flex items-center gap-2 font-mono text-xs"><span style="color:#94e2d5">📓</span>
+          <span class="flex-1 text-gray-100">${highlight(j.title)}</span>
+          ${j.author?`<span class="badge rounded-full px-2 py-0.5 text-[10px]">${esc(j.author)}</span>`:''}
+          <span class="text-gray-600">${esc(fmtDate(j.created))}</span></div>
+        ${j.summary?`<div class="font-mono text-[11px] text-gray-500 mt-1 ml-4 line-clamp-2">${highlight(j.summary)}</div>`:''}
+        <div class="font-mono text-[10px] text-gray-700 mt-1 ml-4">${esc(j.slug)}</div></article>`).join('')):emptySlice('No journal entries mention this venture.'));
+    setCount(items.length);
+  }
+  async function viewResources(){
+    const root=document.getElementById('view-root');
+    const d=await api('/api/resources'); state.counts.resources=d.total; renderNav();
+    let items=applySort(filterQ(d.items,["title","summary","tags"]));
+    root.innerHTML = sectionTitle('RESOURCES','Links, repos, and docs for this venture.') + (items.length?listShell(items.map(r=>`
+      <article class="card-row p-3 border-b border-surface-border/70 ${r.url?'cursor-pointer':''}" ${r.url?`data-url="${esc(r.url)}"`:''}>
+        <div class="flex gap-4 items-center"><div class="flex-shrink-0">${thumb(r.type,'w-12 h-12')}</div>
+          <div class="min-w-0 flex-1"><div class="font-mono font-semibold text-sm text-gray-100 line-clamp-2">${highlight(r.title)}</div>
+            <div class="font-mono text-[11px] text-gray-500 mt-1 break-all line-clamp-2">${esc(r.summary)}</div></div>
+          <span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]" style="color:${tcolor(r.type)};border-color:${tcolor(r.type)}55">${esc(r.type)}</span>
+        </div></article>`).join('')):emptySlice('No resources linked.'));
+    setCount(items.length);
+  }
+  async function viewMilestones(){
+    const root=document.getElementById('view-root');
+    const v=await api('/api/venture'); if(v.error){ root.innerHTML=sectionTitle('MILESTONES')+emptySlice(v.error); return; }
+    const ms=v.milestones||[], dl=v.deadlines||[]; state.counts.milestones=ms.length+dl.length; renderNav();
+    const msRow=m=>`<article class="card-row p-3 border-b border-surface-border/70"><div class="flex items-center gap-2 font-mono text-xs">
+      <span style="color:#f9e2af">◆</span><span class="flex-1 ${/(complete|done)/i.test(m.status||'')?'line-through text-gray-600':'text-gray-100'}">${esc(m.title||m.label||'')}</span>
+      <span class="badge rounded-full px-2 py-0.5 text-[10px]">${esc(m.status||'')}</span>${m.date?`<span class="text-gray-600">${esc(m.date)}</span>`:''}</div></article>`;
+    const dlRow=d=>`<article class="card-row p-3 border-b border-surface-border/70"><div class="flex items-center gap-2 font-mono text-xs">
+      <span style="color:${d.overdue?'#f38ba8':'#fab387'}">⚑</span><span class="flex-1 text-gray-100">${esc(d.label||d.description||'')}</span>
+      ${d.overdue?'<span class="badge rounded-full px-2 py-0.5 text-[10px]" style="color:#f38ba8;border-color:#f38ba855">overdue</span>':''}
+      <span class="text-gray-600">${esc(d.date||'')}</span></div></article>`;
+    root.innerHTML = sectionTitle('MILESTONES') +
+      `<h3 class="font-pixel text-accent-blue text-[10px] tracking-wider mb-2">MILESTONES (${ms.length})</h3>${ms.length?listShell(ms.map(msRow).join('')):emptySlice('none')}
+       <h3 class="font-pixel text-accent-yellow text-[10px] tracking-wider mb-2 mt-5">DEADLINES (${dl.length})</h3>${dl.length?listShell(dl.map(dlRow).join('')):emptySlice('none')}`;
+    setCount(null);
+  }
+  async function viewProject(){
+    const root=document.getElementById('view-root');
+    const v=await api('/api/venture'); if(v.error){ root.innerHTML=sectionTitle('PROJECT')+emptySlice(v.error); return; }
+    const dv=v.deliverables||[];
+    root.innerHTML = sectionTitle('PROJECT', `${v.stage} · ${v.priority}`) +
+      `<div class="rounded-xl border border-surface-border bg-surface-card p-5 mb-5"><div class="font-mono text-sm text-gray-300 leading-6">${esc(v.description)}</div></div>
+       <h3 class="font-pixel text-accent-green text-[10px] tracking-wider mb-2">DELIVERABLES (${dv.length})</h3>
+       ${dv.length?listShell(dv.map(d=>`<article class="card-row p-3 border-b border-surface-border/70"><div class="flex items-center gap-2 font-mono text-xs"><span class="flex-1 text-gray-100">${esc(d.title||'')}</span><span class="badge rounded-full px-2 py-0.5 text-[10px]">${esc(d.status||'')}</span></div></article>`).join('')):emptySlice('none')}
+       <h3 class="font-pixel text-accent-purple text-[10px] tracking-wider mb-2 mt-5">TEAM</h3>
+       <div class="flex flex-wrap gap-2">${(v.co_venturers||[]).map(c=>`<span class="badge rounded-full px-3 py-1 font-mono text-xs">${esc(c.name)} — ${esc(c.role||'')}</span>`).join('')||emptySlice('none')}</div>`;
+    setCount(null);
+  }
+  async function viewFinance(){
+    const root=document.getElementById('view-root');
+    const v=await api('/api/venture'); if(v.error){ root.innerHTML=sectionTitle('FINANCE')+emptySlice(v.error); return; }
+    const f=v.financial||{}, inv=f.invoices||[];
+    const metric=(n,l)=>`<div class="metric-card rounded-xl border border-surface-border bg-surface-card p-4 text-center transition"><div class="font-pixel text-accent-green text-base">${esc(n)}</div><div class="font-mono text-[10px] text-gray-600 uppercase tracking-wider mt-1">${esc(l)}</div></div>`;
+    root.innerHTML = sectionTitle('FINANCE') +
+      `<div class="grid grid-cols-3 gap-3 mb-5">${metric((f.revenue_to_date??'—')+' '+(f.currency||''),'revenue')}${metric(f.cap??f.budget??'—','cap / budget')}${metric(inv.length,'invoices')}</div>
+       <h3 class="font-pixel text-accent-blue text-[10px] tracking-wider mb-2">INVOICES</h3>
+       ${inv.length?listShell(inv.map(i=>`<article class="card-row p-3 border-b border-surface-border/70"><div class="flex items-center gap-2 font-mono text-xs">
+         <span class="text-gray-600">${esc(i.id||i.number||'')}</span><span class="flex-1 text-gray-100">${esc(i.description||i.label||'')}</span>
+         <span class="badge rounded-full px-2 py-0.5 text-[10px]">${esc(i.amount??'')} ${esc(i.currency||f.currency||'')}</span>
+         <span class="badge rounded-full px-2 py-0.5 text-[10px]" style="${/paid/i.test(i.status||'')?'color:#a6e3a1;border-color:#a6e3a155':''}">${esc(i.status||'')}</span></div></article>`).join('')):emptySlice('No invoices on the venture file — ledger join coming next build.')}`;
+    setCount(null);
+  }
+
+  // ---------- Cards view: two sub-views (Cards grid | Graph) ----------
+  function subTabBar(){
+    const tab=(k,l)=>`<button data-sub="${k}" class="nav-tab ${state.cardsSub===k?'active':''} rounded-lg border border-transparent px-4 py-2 font-mono text-xs">${l}</button>`;
+    return `<div class="flex items-center gap-2 mb-4">${tab('cards','▦ Cards')}${tab('graph','◓ Graph')}</div>`;
+  }
+  function wireSubTabs(){
+    document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ state.cardsSub=b.dataset.sub; state.q=''; document.getElementById('global-search').value=''; renderSort(); render(); });
+  }
+  async function viewCardsAll(){
+    const root=document.getElementById('view-root');
+    let all=await api('/api/list');
+    state.counts.cards=all.length; renderNav();
+    if(state.cardsSub==='graph'){
+      root.innerHTML = subTabBar() + sectionTitle('CARD GRAPH', `${all.length} node-cards — drag to pan, scroll to zoom, hover for summary.`) +
+        `<div class="rounded-xl border border-surface-border bg-surface-card overflow-hidden" style="height:640px;position:relative">
+           <svg id="graph-svg" style="width:100%;height:100%;display:block"></svg>
+           <div id="graph-tip" style="position:absolute;pointer-events:none;opacity:0;background:#0e1116ee;border:1px solid #2a2a3e;border-radius:6px;padding:8px 10px;font:11px/1.4 'JetBrains Mono',monospace;max-width:280px;z-index:5"></div>
+           <div id="graph-legend" class="absolute top-3 left-3 flex flex-wrap gap-2"></div>
+         </div>`;
+      wireSubTabs(); setCount(null);
+      const edges=await api('/api/edges');
+      drawGraph(all, edges.links);
+      return;
+    }
+    // cards sub-view: type chips + grid
+    const types=['all',...Object.keys(all.reduce((a,c)=>{a[c.type]=1;return a;},{}))];
+    const chip=t=>`<button data-ctype="${t}" class="badge rounded-full px-3 py-1 font-mono text-xs ${state.cardsType===t?'!border-accent-green !text-accent-green':''}" ${t!=='all'?`style="border-color:${tcolor(t)}55"`:''}>${t==='all'?'all':glyph(t)+' '+t}</button>`;
+    let items = state.cardsType==='all' ? all : all.filter(c=>c.type===state.cardsType);
+    items = applySort(filterQ(items,["title","summary","tags"]));
+    root.innerHTML = subTabBar() + sectionTitle('CARDS','Every card in the graph. Filter by type, sort, search.') +
+      `<div class="flex flex-wrap gap-2 mb-4">${types.map(chip).join('')}</div>` +
+      (items.length?listShell(items.map(cardRow).join('')):emptySlice('No cards.'));
+    wireSubTabs();
+    root.querySelectorAll('[data-ctype]').forEach(b=>b.onclick=()=>{ state.cardsType=b.dataset.ctype; render(); });
+    setCount(items.length);
+  }
+  // D3 force graph — mirrors scripts/cards_graph.py styling.
+  function drawGraph(nodes, links){
+    const svgEl=document.getElementById('graph-svg'); if(!svgEl||!window.d3) return;
+    const W=svgEl.clientWidth||900, H=svgEl.clientHeight||640;
+    const N=nodes.map(n=>({id:n.slug,type:n.type,title:n.title,xp:n.xp||10,summary:n.summary||''}));
+    const L=links.map(l=>({source:l.source,target:l.target,rel:l.rel_type})).filter(l=>N.some(n=>n.id===l.source)&&N.some(n=>n.id===l.target));
+    const types=[...new Set(N.map(n=>n.type))];
+    const color=t=>tcolor(t);
+    const r=d3.scaleSqrt(d3.extent(N,n=>n.xp),[7,26]);
+    const svg=d3.select(svgEl); svg.selectAll('*').remove();
+    const rootG=svg.append('g');
+    svg.call(d3.zoom().scaleExtent([.2,4]).on('zoom',e=>rootG.attr('transform',e.transform)));
+    const sim=d3.forceSimulation(N)
+      .force('link',d3.forceLink(L).id(d=>d.id).distance(95).strength(.4))
+      .force('charge',d3.forceManyBody().strength(-280))
+      .force('center',d3.forceCenter(W/2,H/2))
+      .force('collide',d3.forceCollide().radius(d=>r(d.xp)+8));
+    const link=rootG.append('g').attr('stroke','#2a2a3e').attr('stroke-width',1.2).selectAll('line').data(L).join('line');
+    const lt=rootG.append('g').selectAll('text').data(L).join('text').text(d=>d.rel||'').attr('fill','#6e7681').attr('font-size',8).attr('font-family','JetBrains Mono,monospace').attr('pointer-events','none');
+    const node=rootG.append('g').selectAll('g').data(N).join('g').style('cursor','pointer')
+      .call(d3.drag().on('start',(e,d)=>{if(!e.active)sim.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;})
+        .on('drag',(e,d)=>{d.fx=e.x;d.fy=e.y;}).on('end',(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}));
+    node.append('circle').attr('r',d=>r(d.xp)).attr('fill',d=>color(d.type)).attr('stroke','#0e1116').attr('stroke-width',1.5)
+      .on('click',(e,d)=>openCard(d.id))
+      .on('mousemove',(e,d)=>{ const tip=document.getElementById('graph-tip'); tip.style.opacity=1;
+        tip.style.left=(e.offsetX+14)+'px'; tip.style.top=(e.offsetY+14)+'px';
+        tip.innerHTML=`<b style="color:#fff">${esc(d.title)}</b><div style="color:${color(d.type)}">${esc(d.type)}</div><div class="t" style="color:#8b949e;margin-top:4px">${esc(d.summary)}</div>`; })
+      .on('mouseleave',()=>{ document.getElementById('graph-tip').style.opacity=0; });
+    node.append('text').text(d=>d.title.length>34?d.title.slice(0,32)+'…':d.title)
+      .attr('x',d=>r(d.xp)+5).attr('y',4).attr('fill','#c9d1d9').attr('font-size',11).attr('font-family','JetBrains Mono,monospace').attr('pointer-events','none');
+    sim.on('tick',()=>{
+      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      lt.attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2);
+      node.attr('transform',d=>`translate(${d.x},${d.y})`);
+    });
+    document.getElementById('graph-legend').innerHTML=types.map(t=>`<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]" style="color:${color(t)};border-color:${color(t)}55">${glyph(t)} ${esc(t)}</span>`).join('');
+  }
+
+  // ---------- detail panel ----------
+  function setDetail(html, ctx='Card'){ document.getElementById('detail-context').textContent=ctx; document.getElementById('detail-body').innerHTML=html; }
+  async function openCard(id){
+    state.selected=id; document.querySelectorAll('.card-row').forEach(r=>r.classList.remove('selected'));
+    const d=await api('/api/detail/'+encodeURIComponent(id));
+    if(d.error){ setDetail('<div class="text-accent-red">not found</div>'); return; }
+    const edges=(d.edges||[]).map(e=>`<div class="font-mono text-[11px] mb-1.5">
+      <span class="badge rounded-full px-2 py-0.5 text-[10px]" style="color:#cba6f7;border-color:#cba6f744">${e.direction==='out'?'→':'←'} ${esc(e.rel_type)}</span>
+      <a class="text-accent-blue cursor-pointer" data-card="${esc(e.other_id)}">${esc(e.other_title)}</a>
+      ${e.summary?`<div class="text-gray-600 ml-1 mt-0.5">${esc(e.summary)}</div>`:''}</div>`).join('');
+    const outcomes=(d.key_outcomes||[]).map(o=>`<li>${esc(o)}</li>`).join('');
+    setDetail(`
+      <div class="flex items-center gap-2 mb-3 flex-wrap">
+        <span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]" style="border-color:${tcolor(d.type)}55;color:${tcolor(d.type)}">${glyph(d.type)} ${esc(d.type)}</span>
+        ${tierBadge((d.provenance&&d.provenance.tier)||d.tier)}
+        <span class="font-mono text-[10px] text-gray-600 ml-auto">${esc(fmtDate(d.created))}${d.xp!=null?` · L${esc(d.level)} · ${esc(d.xp)}xp`:''}</span>
+      </div>
+      ${provBlock(d.provenance)}
+      <div class="font-mono font-semibold text-sm text-gray-100 leading-6 mb-3">${esc(d.title)}</div>
+      ${d.project||d.client?`<div class="mb-3 flex flex-wrap gap-1.5">${d.project?`<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]">${esc(d.project)}</span>`:''}${d.client?`<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]">${esc(d.client)}</span>`:''}</div>`:''}
+      <div class="font-mono text-[13px] text-gray-300 leading-6 mb-4 whitespace-pre-wrap">${esc(d.body||d.description||'')}</div>
+      ${outcomes?`<h3 class="font-pixel text-accent-green text-[10px] tracking-wider mb-2">KEY OUTCOMES</h3><ul class="font-mono text-[12px] text-gray-300 list-disc pl-5 mb-4 leading-6">${outcomes}</ul>`:''}
+      ${(d.participants||[]).length?`<h3 class="font-pixel text-accent-pink text-[10px] tracking-wider mb-2">PARTICIPANTS</h3><div class="flex flex-wrap gap-1.5 mb-4">${d.participants.map(p=>`<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]">👤 ${esc(p)}</span>`).join('')}</div>`:''}
+      ${edges?`<h3 class="font-pixel text-accent-purple text-[10px] tracking-wider mb-2">INCIDENCE (${(d.edges||[]).length})</h3>${edges}`:''}
+      ${(d.tags||[]).length?`<div class="mt-3 flex flex-wrap gap-1.5">${d.tags.map(t=>`<span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]">#${esc(t)}</span>`).join('')}</div>`:''}
+      ${(d.sources||[]).length?`<div class="font-mono text-[10px] text-gray-700 mt-4 break-all">src: ${d.sources.map(esc).join('<br>')}</div>`:''}
+    `, d.type);
+    const row=document.querySelector(`.card-row[data-card="${(window.CSS&&CSS.escape)?CSS.escape(id):id}"]`); if(row) row.classList.add('selected');
+  }
+  function openPerson(name){
+    const items=window.__people||[]; const p=items.find(x=>x.name===name); if(!p) return;
+    setDetail(`<div class="flex items-center gap-2 mb-3"><span class="badge rounded-full px-2 py-0.5 font-mono text-[10px]" style="color:#f5c2e7;border-color:#f5c2e755">👤 person</span></div>
+      <div class="font-mono font-semibold text-sm text-gray-100 mb-1">${esc(p.name)}</div>
+      <div class="font-mono text-[10px] text-gray-600 mb-3">${esc(p.count)} cards</div>
+      ${p.cards.map(c=>`<div class="font-mono text-[11px] mb-1.5"><span class="badge rounded-full px-1.5 py-0.5 text-[10px]" style="color:${tcolor(c.type)};border-color:${tcolor(c.type)}55">${glyph(c.type)}</span>
+        <a class="text-accent-blue cursor-pointer" data-card="${esc(c.id)}">${esc(c.title)}</a> <span class="text-gray-700">${esc(fmtDate(c.created))}</span></div>`).join('')}`, 'Person');
+  }
+
+  // ---------- router ----------
+  const RENDER = { about:viewAbout, overview:viewOverview, cards:viewCardsAll, people:viewPeople, incidence:viewIncidence, backlog:viewBacklog,
+                   journal:viewJournal, resources:viewResources, milestones:viewMilestones, project:viewProject, finance:viewFinance };
+  function render(){
+    renderSort();
+    const v=VIEWS.find(x=>x.key===state.view);
+    if(v&&v.ctype) return viewCards(v.ctype, v.label);
+    return (RENDER[state.view]||viewOverview)();
+  }
+  function setView(view){
+    state.view=VIEWS.some(v=>v.key===view)?view:'about'; state.q=''; document.getElementById('global-search').value='';
+    const u=new URL(location); u.searchParams.set('view',state.view); history.replaceState({},'',u);
+    renderNav(); render();
+  }
+  async function renderHealth(){ try{ const s=await api('/api/stats'); document.getElementById('header-counts').textContent=`${s.nodes} cards / ${s.edges} links / ${s.people} ppl`; }catch(e){} }
+  // Delegated click handling — no inline onclick string-building (XSS-safe:
+  // ids/names/urls live in HTML-escaped data-* attributes, never in JS source
+  // strings). One listener covers the list, the graph, and the detail panel.
+  function wireDelegation(){
+    document.addEventListener('click', e=>{
+      const card=e.target.closest('[data-card]'); if(card){ openCard(card.getAttribute('data-card')); return; }
+      const person=e.target.closest('[data-person]'); if(person){ openPerson(person.getAttribute('data-person')); return; }
+      const res=e.target.closest('[data-url]'); if(res){ const u=res.getAttribute('data-url'); if(u) window.open(u,'_blank','noopener'); return; }
+      const gv=e.target.closest('[data-goview]'); if(gv){ setView(gv.getAttribute('data-goview')); return; }
+    });
+  }
+  async function init(){
+    const params=new URLSearchParams(location.search);
+    state.view=VIEWS.some(v=>v.key===params.get('view'))?params.get('view'):'about';
+    document.getElementById('global-search').addEventListener('input', e=>{ state.q=e.target.value; render(); });
+    wireDelegation();
+    renderHealth(); renderNav(); render();
+  }
+  init();
+  </script>
+</body>
+</html>

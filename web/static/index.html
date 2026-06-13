@@ -27,6 +27,10 @@
   .chip:hover { border-color:#89b4fa66; color:#89b4fa; }
   .chip.active { background:#1e1e30; border-color:#cba6f7; color:#cba6f7; }
   .focus-col { background:#181825; border:1px solid #313244; border-radius:6px; padding:10px; }
+  .focus-scroll { max-height:240px; overflow-y:auto; padding-right:4px; }
+  .focus-scroll::-webkit-scrollbar { width:6px; }
+  .focus-scroll::-webkit-scrollbar-track { background:transparent; }
+  .focus-scroll::-webkit-scrollbar-thumb { background:#45475a; border-radius:3px; }
   .focus-item { cursor:pointer; border-radius:4px; padding:3px 4px; transition:background 0.12s ease; }
   .focus-item:hover { background:#1e1e30; }
 </style>
@@ -43,6 +47,7 @@
     <main id="page" class="flex-1 p-3">
       <div id="focus-rail"></div>
       <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
+      <h2 id="grid-heading" class="font-pixel text-sm text-green mb-3 hidden"></h2>
       <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
       <div id="placeholder" class="hidden text-subtext text-sm p-6"></div>
     </main>
@@ -73,9 +78,13 @@
     }
     async function route() {
       const p = qs();
-      if (p.get("m")) { return renderMilestone(p.get("v"), p.get("m")); }
+      // Phase 1 (task-4101): the per-venture surface is now /ventures/<slug>/.
+      // 302-style client redirect for old ?v= deep-links (self-healing, like
+      // youtube's VIEW_MIGRATE). Relative target resolves against /ventures/
+      // in both Mode A and Mode B.
+      const vslug = p.get("v");
+      if (vslug) { location.replace(encodeURIComponent(vslug) + "/"); return; }
       if (p.get("p")) { return renderProject(p.get("p")); }
-      if (p.get("v")) { return renderVenture(p.get("v")); }
       const view = VIEWS.includes(p.get("view")) ? p.get("view") : "portfolio";
       state.view = view;
       showPage();
@@ -126,8 +135,8 @@
         { key:"attention", label:"Needs attention" },
       ];
       const colHtml = c => {
-        const items = (f[c.key] || []);
-        const body = items.length ? items.map((it, i) => `
+        const all = (f[c.key] || []);
+        const body = all.length ? all.map((it, i) => `
           <div class="focus-item" data-go='${esc(JSON.stringify(it.ref||{}))}'>
             <div class="flex items-center gap-2 text-xs">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:${dotColor(it.priority)}"></span>
@@ -137,8 +146,8 @@
           </div>`).join("")
           : `<p class="text-subtext text-xs">nothing scheduled</p>`;
         return `<div class="focus-col">
-          <div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)}</div>
-          <div class="space-y-1">${body}</div>
+          <div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)} ${all.length ? `<span class="text-subtext">(${all.length})</span>` : ""}</div>
+          <div class="space-y-1 focus-scroll">${body}</div>
         </div>`;
       };
       rail.innerHTML = `<div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">` +
@@ -158,6 +167,7 @@
       document.getElementById("focus-rail").classList.add("hidden");
       document.getElementById("lifecycle-chips").classList.add("hidden");
       document.getElementById("grid").classList.add("hidden");
+      { const gh = document.getElementById("grid-heading"); if (gh) gh.classList.add("hidden"); }
       renderStats(); // keep header health-slot fresh
       const ph = document.getElementById("placeholder");
       ph.classList.remove("hidden");
@@ -169,6 +179,7 @@
       document.getElementById("focus-rail").classList.add("hidden");
       document.getElementById("lifecycle-chips").classList.add("hidden");
       document.getElementById("grid").classList.add("hidden");
+      { const gh = document.getElementById("grid-heading"); if (gh) gh.classList.add("hidden"); }
       document.getElementById("placeholder").classList.add("hidden");
       renderStats(); // keep header health-slot fresh
       const main = document.getElementById("page");
@@ -425,6 +436,8 @@
       let items = await api("api/list");
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
       if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
+      const h = document.getElementById("grid-heading");
+      if (h) { h.textContent = `Ventures (${items.length})`; h.classList.remove("hidden"); }
       document.getElementById("grid").innerHTML = items.map(i => `
         <div class="ui-card cursor-pointer" data-slug="${esc(i.slug)}">
           <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${esc(i.title)}</div>
