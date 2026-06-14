@@ -40,6 +40,9 @@ def _parse_date(raw: Any) -> str | None:
 
 def timeline(ventures_root, backlog_dir, today: date) -> dict:
     acc = VenturesAccessor(data_root=Path(ventures_root), today=today)
+    # Join the whole backlog ONCE (cached, per-file), grouped by venture, instead
+    # of re-scanning all backlog files per venture.
+    tasks_by_venture = ventures_backlog.tasks_by_venture(Path(backlog_dir))
 
     lanes: list[dict[str, Any]] = []
     all_dates: list[str] = []
@@ -79,7 +82,7 @@ def timeline(ventures_root, backlog_dir, today: date) -> dict:
                 "priority": str(dl.get("priority") or ""),
             })
 
-        for t in ventures_backlog.tasks_for(slug, backlog_dir=Path(backlog_dir)):
+        for t in tasks_by_venture.get(slug, []):
             d = _parse_date(t.get("due"))
             if d is None:
                 continue

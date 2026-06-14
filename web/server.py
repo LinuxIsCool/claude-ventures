@@ -28,6 +28,25 @@ STATIC_DIR: Path = HERE / "static"
 DEFAULT_PORT = 8890
 
 
+def _warm_caches(data_root: Path, backlog_dir: Path) -> None:
+    """Pre-parse the backlog + venture caches in a daemon thread so the first
+    timeline/overview request doesn't pay the cold ~2s full-parse on a fresh
+    server. Best-effort: failures are swallowed (the request path re-parses
+    lazily anyway), and the thread is a daemon so it never blocks shutdown.
+    """
+    import threading
+
+    def _warm() -> None:
+        try:
+            import ventures_backlog
+            ventures_backlog.tasks_by_venture(backlog_dir)
+            VenturesAccessor(data_root=data_root).list({})
+        except Exception:  # noqa: BLE001 — warm-up is strictly best-effort
+            pass
+
+    threading.Thread(target=_warm, name="ventures-cache-warm", daemon=True).start()
+
+
 def build_kernel(
     port: int = DEFAULT_PORT,
     bind: str = "127.0.0.1",
@@ -46,6 +65,7 @@ def build_kernel(
         data_root = Path.home() / ".claude" / "local" / "ventures"
     if backlog_dir is None:
         backlog_dir = Path.home() / ".claude" / "local" / "backlog"
+    _warm_caches(data_root, backlog_dir)
     accessor = VenturesAccessor(data_root=data_root)
     return VenturesKernel(
         accessor=accessor,
