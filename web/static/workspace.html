@@ -51,6 +51,7 @@
   <header class="w-full max-w-[1800px] mx-auto px-5 2xl:px-6 pt-6 pb-4">
     <div class="flex items-start justify-between gap-6 flex-wrap">
       <div>
+        <div id="crumb" class="font-mono text-xs mb-1"></div>
         <h1 class="font-pixel text-accent-green text-lg tracking-wider" id="ws-title">CIE WORKSPACE</h1>
         <p class="font-mono text-sm text-gray-500 mt-2" id="ws-sub">Venture workspace over the card graph</p>
       </div>
@@ -152,6 +153,14 @@
   function attr(s){ return esc(s).replace(/'/g,'&#39;'); }
   function apiPath(p){ return p.replace(/^\//,''); }
   async function api(p){ const r=await fetch(apiPath(p)); if(!r.ok) throw new Error(p+' -> '+r.status); return r.json(); }
+  // Mount/venture path helpers — robust to missing trailing slash. From
+  // /ventures/<slug> OR /ventures/<slug>/ → base '/ventures/', slug '<slug>'.
+  function venturesBase(){ const p=location.pathname.split('/').filter(Boolean); return '/'+(p[0]||'ventures')+'/'; }
+  function ventureSlug(){ const p=location.pathname.split('/').filter(Boolean); return p[1]||''; }
+  function renderCrumb(name){
+    const el=document.getElementById('crumb'); if(!el) return;
+    el.innerHTML=`<a href="${esc(venturesBase())}" class="text-accent-blue">← Ventures</a> <span class="text-gray-600">/</span> <span class="text-gray-400">${esc(name||ventureSlug())}</span>`;
+  }
   const glyph = t => GLYPH[t]||"▦";
   const tcolor = t => TYPE_COLOR[t]||"#7f849c";
   const prioDot = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[String(p).toLowerCase()]||'#7f849c');
@@ -221,7 +230,9 @@
   // ---------- nav + sort ----------
   function renderNav(){
     const nav=document.getElementById('nav');
-    nav.innerHTML = VIEWS.map(v=>{
+    // Backlink to the venture portfolio (relative '../' → /ventures/ in Mode B).
+    const back = `<a href="${esc(venturesBase())}" class="nav-tab block w-full text-left rounded-lg border border-transparent px-3 py-2.5 font-mono text-xs text-accent-blue" style="margin-bottom:8px;border-color:#89b4fa33">← All Ventures</a>`;
+    nav.innerHTML = back + VIEWS.map(v=>{
       const c=state.counts[v.key]; const cnt=(c==null)?'':`<span class="float-right text-gray-600">${c}</span>`;
       return `<button data-view="${v.key}" class="nav-tab ${state.view===v.key?'active':''} w-full text-left rounded-lg border border-transparent px-3 py-2.5 font-mono text-xs">${esc(v.label)}${cnt}</button>`;
     }).join('');
@@ -250,7 +261,8 @@
     if(v.error){ root.innerHTML=sectionTitle('ABOUT')+emptySlice(v.error); return; }
     // header title reflects the venture
     if(v.title){ document.getElementById('ws-title').textContent=String(v.title).toUpperCase();
-      document.getElementById('ws-sub').textContent=`${v.stage||''}${v.priority?' · '+v.priority:''}`; }
+      document.getElementById('ws-sub').textContent=`${v.stage||''}${v.priority?' · '+v.priority:''}`;
+      renderCrumb(v.title); }
     const ms=(v.milestones||[]).slice(0,5), dl=(v.deadlines||[]).slice(0,5);
     const links=Object.entries(v.links||{});
     const team=v.co_venturers||[];
@@ -547,10 +559,14 @@
     });
   }
   async function init(){
+    // Guarantee a trailing slash so every relative URL (api/*, ../static/*)
+    // resolves correctly. /ventures/<slug> → /ventures/<slug>/.
+    if(!location.pathname.endsWith('/')){ location.replace(location.pathname+'/'+location.search); return; }
     const params=new URLSearchParams(location.search);
     state.view=VIEWS.some(v=>v.key===params.get('view'))?params.get('view'):'about';
     document.getElementById('global-search').addEventListener('input', e=>{ state.q=e.target.value; render(); });
     wireDelegation();
+    renderCrumb();
     renderHealth(); renderNav(); render();
   }
   init();

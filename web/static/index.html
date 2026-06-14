@@ -21,6 +21,11 @@
   .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
+  .venture-row { background:#181825; border:1px solid #313244; border-radius:6px; cursor:pointer;
+                 transition:background .15s ease, border-color .15s ease, transform .15s ease; }
+  .venture-row:hover { transform:translateX(3px); background:#1e1e30; border-color:#89b4fa55; }
+  .vthumb { width:48px; height:48px; flex:none; border-radius:6px; display:flex; align-items:center;
+            justify-content:center; font-family:"Press Start 2P",monospace; font-size:0.7rem; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -47,8 +52,11 @@
     <main id="page" class="flex-1 p-3">
       <div id="focus-rail"></div>
       <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
-      <h2 id="grid-heading" class="font-pixel text-sm text-green mb-3 hidden"></h2>
-      <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
+      <div id="grid-bar" class="flex items-center gap-3 mb-3 hidden">
+        <h2 id="grid-heading" class="font-pixel text-sm text-green"></h2>
+        <select id="vsort" class="input ml-auto" style="max-width:200px"></select>
+      </div>
+      <div id="grid" class="space-y-2"></div>
       <div id="placeholder" class="hidden text-subtext text-sm p-6"></div>
     </main>
     <section id="detail" class="w-96 p-3 border-l border-overlay hidden"></section>
@@ -56,7 +64,7 @@
 
   <script src="static/embedded-bar.js"></script>
   <script>
-    const state = { lifecycle: "all", q: "", view: "portfolio" };
+    const state = { lifecycle: "all", q: "", view: "portfolio", sort: "priority" };
     const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
     const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
@@ -167,7 +175,7 @@
       document.getElementById("focus-rail").classList.add("hidden");
       document.getElementById("lifecycle-chips").classList.add("hidden");
       document.getElementById("grid").classList.add("hidden");
-      { const gh = document.getElementById("grid-heading"); if (gh) gh.classList.add("hidden"); }
+      { const gb = document.getElementById("grid-bar"); if (gb) gb.classList.add("hidden"); }
       renderStats(); // keep header health-slot fresh
       const ph = document.getElementById("placeholder");
       ph.classList.remove("hidden");
@@ -179,7 +187,7 @@
       document.getElementById("focus-rail").classList.add("hidden");
       document.getElementById("lifecycle-chips").classList.add("hidden");
       document.getElementById("grid").classList.add("hidden");
-      { const gh = document.getElementById("grid-heading"); if (gh) gh.classList.add("hidden"); }
+      { const gb = document.getElementById("grid-bar"); if (gb) gb.classList.add("hidden"); }
       document.getElementById("placeholder").classList.add("hidden");
       renderStats(); // keep header health-slot fresh
       const main = document.getElementById("page");
@@ -432,18 +440,61 @@
         (misc.length ? group("Other", misc) : "") ||
         `<p class="text-subtext text-sm">no trend data yet</p>`;
     }
+    const PRIO_RANK = { critical:0, high:1, medium:2, low:3 };
+    const LC_RANK = { active:0, exploring:1, sustaining:2, seed:3, dormant:4, harvesting:5 };
+    const VSORTS = [
+      ["priority","priority"], ["overdue","most overdue"], ["name_az","name A→Z"],
+      ["lifecycle","lifecycle"],
+    ];
+    function vsortApply(items) {
+      const s = state.sort, by = f => items.slice().sort(f);
+      const t = x => String(x.title||"").toLowerCase();
+      if (s === "name_az")   return by((a,b) => t(a).localeCompare(t(b)));
+      if (s === "overdue")   return by((a,b) => (b.overdue_count||0) - (a.overdue_count||0));
+      if (s === "lifecycle") return by((a,b) => (LC_RANK[a.lifecycle]??9) - (LC_RANK[b.lifecycle]??9) || t(a).localeCompare(t(b)));
+      // priority (default): critical→low, then most-overdue, then name
+      return by((a,b) =>
+        (PRIO_RANK[String(a.priority).toLowerCase()]??9) - (PRIO_RANK[String(b.priority).toLowerCase()]??9)
+        || (b.overdue_count||0) - (a.overdue_count||0)
+        || t(a).localeCompare(t(b)));
+    }
+    function ventureRow(i) {
+      const dot = dotColor(i.priority);
+      const initials = String(i.title||i.slug).replace(/[^A-Za-z0-9 ]/g,"").split(/\s+/)
+        .filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase() || "··";
+      return `<article class="venture-row p-3" data-slug="${esc(i.slug)}">
+        <div class="flex gap-3 items-center">
+          <div class="vthumb" style="background:${dot}1a;color:${dot}">${esc(initials)}</div>
+          <div class="min-w-0 flex-1">
+            <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${esc(i.title)}</div>
+            <div class="text-subtext text-xs mt-1">${esc(i.stage)} <span class="text-subtext">·</span> ${esc(i.lifecycle)}</div>
+          </div>
+          <div class="flex items-center gap-1 flex-none">
+            <span class="badge" style="border-color:${dot}66;color:${dot}">${esc(i.priority)}</span>
+            ${i.overdue_count ? `<span class="badge" style="border-color:#f38ba866;color:#f38ba8">${esc(i.overdue_count)} overdue</span>` : ""}
+          </div>
+        </div>
+      </article>`;
+    }
     async function renderGrid() {
       let items = await api("api/list");
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
       if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
+      items = vsortApply(items);
+      const bar = document.getElementById("grid-bar");
       const h = document.getElementById("grid-heading");
-      if (h) { h.textContent = `Ventures (${items.length})`; h.classList.remove("hidden"); }
-      document.getElementById("grid").innerHTML = items.map(i => `
-        <div class="ui-card cursor-pointer" data-slug="${esc(i.slug)}">
-          <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${esc(i.title)}</div>
-          <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
-          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
-        </div>`).join("");
+      if (h) h.textContent = `Ventures (${items.length})`;
+      if (bar) bar.classList.remove("hidden");
+      const sel = document.getElementById("vsort");
+      if (sel && !sel.dataset.wired) {
+        sel.innerHTML = VSORTS.map(([v,l]) => `<option value="${v}">sort: ${l}</option>`).join("");
+        sel.value = state.sort;
+        sel.onchange = () => { state.sort = sel.value; renderGrid(); };
+        sel.dataset.wired = "1";
+      }
+      document.getElementById("grid").innerHTML =
+        items.length ? items.map(ventureRow).join("")
+                     : `<p class="text-subtext text-sm p-4">no ventures match</p>`;
       document.querySelectorAll("[data-slug]").forEach(el =>
         el.onclick = () => go({ v: el.dataset.slug }));
     }
