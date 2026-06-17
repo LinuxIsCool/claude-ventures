@@ -10,13 +10,34 @@ Reads active ventures and injects context about approaching deadlines.
 
 import json
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import yaml
 
 VENTURES_BASE = Path.home() / ".claude" / "local" / "ventures"
 METRICS_LATEST = VENTURES_BASE / "metrics" / "latest.json"
 DEADLINE_WINDOW_DAYS = 45
+# Overdue items older than this, with no reconciliation flag, are treated as
+# "likely passed/completed but un-reconciled" — aggregated into one muted line
+# rather than screamed individually. (task-4151: freshness gate / no broken alarms)
+STALE_OVERDUE_DAYS = 14
+# Cached vision-metrics snapshot older than this is marked stale, not presented as current.
+METRICS_TTL_HOURS = 24
+
+# A deadline carrying any of these is considered reconciled and is never surfaced.
+_RECONCILED_STATUSES = {
+    "complete", "completed", "done", "cancelled", "canceled",
+    "moot", "skipped", "achieved", "shipped", "closed",
+}
+
+
+def _is_reconciled(dl: dict) -> bool:
+    """True if a deadline is explicitly marked done/moot/etc. — so it is never
+    surfaced as overdue. Deadlines have no status field today; this lets the data
+    model express truth going forward without a code change."""
+    if dl.get("reconciled") is True or dl.get("done") is True:
+        return True
+    return str(dl.get("status", "")).strip().lower() in _RECONCILED_STATUSES
 
 
 def metrics_brief_line():
@@ -42,11 +63,21 @@ def metrics_brief_line():
             return f"{v:.2f}"
         return str(v)
 
-    return (
+    line = (
         f"FK {fmt('fk_bind_rate')} · overdue {fmt('overdue_ratio')} · "
         f"coverage {fmt('portfolio_coverage')} · fresh {fmt('data_freshness')} · "
         f"autonomy {fmt('human_touch_dependency')} (human-touch)"
     )
+
+    # Freshness gate: don't present a stale snapshot as current.
+    try:
+        computed = datetime.fromisoformat(snap.get("computed_at"))
+        age_h = (datetime.now(computed.tzinfo) - computed).total_seconds() / 3600
+        if age_h > METRICS_TTL_HOURS:
+            line += f" — ⚠ snapshot {age_h:.0f}h old, may be stale (run /ventures-metrics)"
+    except Exception:
+        pass
+    return line
 
 
 def parse_frontmatter(content: str) -> dict:
@@ -84,6 +115,8 @@ def main():
                 for dl in data.get("deadlines", []):
                     if not isinstance(dl, dict) or "date" not in dl:
                         continue
+                    if _is_reconciled(dl):
+                        continue
                     dl_date = dl["date"]
                     if isinstance(dl_date, str):
                         dl_date = date.fromisoformat(dl_date)
@@ -108,7 +141,13 @@ def main():
 
     if urgent:
         urgent.sort(key=lambda x: x["days"])
+        # Freshness gate: recently-overdue (≤ STALE_OVERDUE_DAYS) are live fires worth
+        # naming; older un-reconciled ones are likely already passed/done and get
+        # aggregated into one muted line instead of a wall of false alarms.
+        stale_overdue = [u for u in urgent if u["days"] < -STALE_OVERDUE_DAYS]
         for u in urgent:
+            if u["days"] < -STALE_OVERDUE_DAYS:
+                continue  # rolled into the muted aggregate below
             if u["days"] < 0:
                 sys_parts.append(f"{u['venture']} ({abs(u['days'])}d OVERDUE)")
                 ctx_parts.append(f"OVERDUE: {u['venture']} — {u['label']} ({abs(u['days'])}d overdue)")
@@ -118,6 +157,15 @@ def main():
             else:
                 sys_parts.append(f"{u['venture']} ({u['days']}d)")
                 ctx_parts.append(f"Deadline approaching: {u['venture']} — {u['label']} ({u['days']}d)")
+
+        if stale_overdue:
+            sys_parts.append(f"{len(stale_overdue)} stale-overdue (unreconciled)")
+            ctx_parts.append(
+                f"{len(stale_overdue)} venture deadline(s) >{STALE_OVERDUE_DAYS}d overdue and "
+                f"un-reconciled — likely already passed or completed; NOT shown individually to "
+                f"avoid false alarms. Reconcile (mark status: complete / reconciled: true) or "
+                f"review via /ventures."
+            )
 
     metrics_line = metrics_brief_line()
     if metrics_line:
