@@ -52,13 +52,13 @@ function parseDeadline(deadline: Deadline): Date {
 // =============================================================================
 
 function findNearestDeadline(venture: Venture): Deadline | null {
-  const deadlines: Deadline[] = [...venture.deadlines];
+  const deadlines: Deadline[] = [...(venture.deadlines || [])];
 
-  for (const milestone of venture.milestones) {
+  for (const milestone of venture.milestones || []) {
     if (!milestone.completed && milestone.deadline) {
       deadlines.push(milestone.deadline);
     }
-    for (const deliverable of milestone.deliverables) {
+    for (const deliverable of milestone.deliverables || []) {
       if (!deliverable.completed && deliverable.deadline) {
         deadlines.push(deliverable.deadline);
       }

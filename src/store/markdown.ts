@@ -29,6 +29,7 @@ import {
   getVentureDirectory,
   loadConfig,
 } from "../config";
+import { localDateStr } from "../utils/dates";
 import { calculatePriority, createDefaultContext, sortByPriority } from "../priority/calculator";
 
 // =============================================================================
@@ -81,6 +82,12 @@ function parseVenture(content: string, filePath: string): Venture {
     deadlines: data.deadlines || [],
     milestones: data.milestones || [],
     co_venturers: data.co_venturers || [],
+    co_ventures: data.co_ventures ?? [],
+    parent_ventures: data.parent_ventures ?? [],
+    child_ventures: data.child_ventures ?? [],
+    projects: data.projects ?? [],
+    stakeholders: data.stakeholders ?? [],
+    personas: data.personas ?? [],
     financial: data.financial,
     tags: data.tags || [],
     links: data.links,
@@ -485,7 +492,7 @@ export function createMarkdownStore(): VentureStore {
 
       if (notes) {
         const existingNotes = venture.notes || "";
-        const timestamp = new Date().toISOString().split("T")[0];
+        const timestamp = localDateStr();
         updates.notes = `${existingNotes}\n\n## ${timestamp}: Stage → ${newStage}\n\n${notes}`.trim();
       }
 

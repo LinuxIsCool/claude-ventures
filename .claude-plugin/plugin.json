@@ -7,5 +7,14 @@
   "keywords": ["ventures", "portfolio", "projects", "deadlines", "milestones", "creative"],
   "skills": ["./skills/"],
   "commands": ["./commands/"],
-  "agents": ["./agents/venture-navigator.md"]
+  "agents": ["./agents/venture-navigator.md"],
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py",
+        "timeout": 5
+      }]
+    }]
+  }
 }

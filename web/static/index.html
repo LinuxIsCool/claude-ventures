@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en" class="dark bg-base">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>claude-ventures — Legion portfolio</title>
+<link rel="stylesheet" href="static/fonts.css" />
+<link rel="stylesheet" href="static/tailwind.css" />
+<link rel="stylesheet" href="static/legion-ui.css" />
+<style>
+  body { font-family: "JetBrains Mono", monospace; }
+  .input { background:#181825; border:1px solid #45475a; border-radius:4px;
+           padding:4px 8px; color:#cdd6f4; font-size:0.8rem; outline:none; }
+  .input:focus { border-color:#89b4fa66; }
+  .badge { display:inline-flex; align-items:center; padding:1px 6px;
+           border:1px solid #45475a; border-radius:4px; color:#bac2de;
+           font-size:0.65rem; margin:1px; }
+  .nav-link { display:block; padding:3px 8px; border-radius:4px; cursor:pointer;
+              font-size:0.8rem; transition:all 0.15s ease; }
+  .nav-link:hover { background:#1e1e30; color:#89b4fa; }
+  .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
+             padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
+  .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
+  .ui-card.dim { opacity:.34; filter:grayscale(.55); }
+  .ui-card.hl  { box-shadow:0 0 0 2px var(--hl,#cba6f7); }
+  .ui-card .open-btn { opacity:0; transition:opacity .12s; cursor:pointer; }
+  .ui-card:hover .open-btn { opacity:.85; }
+  .nav-link.active { background:#1e1e30; color:#cba6f7; }
+  .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
+          font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
+  .chip:hover { border-color:#89b4fa66; color:#89b4fa; }
+  .chip.active { background:#1e1e30; border-color:#cba6f7; color:#cba6f7; }
+  .focus-col { background:#181825; border:1px solid #313244; border-radius:6px; padding:10px; }
+  .focus-item { cursor:pointer; border-radius:4px; padding:3px 4px; transition:background 0.12s ease; }
+  .focus-item:hover { background:#1e1e30; }
+</style>
+</head>
+<body class="bg-base text-text font-mono">
+  <header class="flex items-center gap-4 p-3 border-b border-overlay">
+    <h1 class="font-pixel text-mauve text-sm">claude-ventures</h1>
+    <input id="search" class="input flex-1" placeholder="filter ventures…" />
+    <span id="healthz-slot" class="badge"></span>
+  </header>
+
+  <div class="flex">
+    <aside id="page-nav" class="w-48 p-3 border-r border-overlay"></aside>
+    <main id="page" class="flex-1 p-3">
+      <div id="portfolio-cols" class="flex gap-4 items-start">
+        <div class="flex-1 min-w-0">
+          <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
+          <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+        </div>
+        <aside id="focus-rail" class="w-72 flex-none"></aside>
+      </div>
+      <div id="placeholder" class="hidden text-subtext text-sm p-6"></div>
+    </main>
+    <section id="detail" class="w-96 p-3 border-l border-overlay hidden"></section>
+  </div>
+
+  <script src="static/embedded-bar.js"></script>
+  <script>
+    const state = { lifecycle: "all", q: "", view: "portfolio", highlights: new Set(), identity: {}, ventures: [] };
+    const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
+    const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
+    const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function qs() { return new URLSearchParams(location.search); }
+    function go(params) {
+      const u = new URL(location); u.search = new URLSearchParams(params).toString();
+      history.pushState({}, "", u); route();
+    }
+    function showPage() {
+      // Reset page <main> back to the standard layout (detail renderers mutate it).
+      document.getElementById("detail").classList.add("hidden");
+      const main = document.getElementById("page");
+      main.className = "flex-1 p-3";
+      main.classList.remove("hidden");
+      const vh = document.getElementById("view-host");
+      if (vh) vh.remove(); // clear any prior timeline/priorities/trends content
+      document.getElementById("page-nav").classList.remove("hidden");
+    }
+    async function route() {
+      const p = qs();
+      if (p.get("m")) { return renderMilestone(p.get("v"), p.get("m")); }
+      if (p.get("p")) { return renderProject(p.get("p")); }
+      if (p.get("v")) { return renderVenture(p.get("v")); }
+      const view = VIEWS.includes(p.get("view")) ? p.get("view") : "portfolio";
+      state.view = view;
+      showPage();
+      renderNav();
+      if (view === "portfolio") return renderPortfolio();
+      if (view === "timeline") return renderTimeline();
+      if (view === "priorities") return renderPriorities();
+      if (view === "trends") return renderTrends();
+    }
+    window.onpopstate = route;
+    function renderNav() {
+      const nav = document.getElementById("page-nav");
+      const labels = { portfolio:"Portfolio", timeline:"Timeline", priorities:"Priorities", trends:"Trends" };
+      nav.innerHTML = VIEWS.map(v =>
+        `<div class="nav-link font-pixel ${state.view===v?"active":""}" data-view="${v}">${labels[v]}</div>`).join("");
+      nav.querySelectorAll("[data-view]").forEach(el =>
+        el.onclick = () => go({ view: el.dataset.view }));
+    }
+    async function api(path) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(path + " " + r.status);
+      return r.json();
+    }
+    function lifecycleColor(lc) {
+      return { active:"text-green", exploring:"text-blue",
+               dormant:"text-subtext", harvesting:"text-yellow" }[lc] || "text-text";
+    }
+    // ---- identity (emoji + colour) + persistent multi-select highlight filter ----
+    const HL_KEY = "ventures.highlights";
+    function loadHL() { try { return new Set(JSON.parse(localStorage.getItem(HL_KEY) || "[]")); } catch (e) { return new Set(); } }
+    function saveHL() { localStorage.setItem(HL_KEY, JSON.stringify([...state.highlights])); }
+    async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
+    function ident(slug) { return state.identity[slug] || {}; }
+    function toggleHighlight(slug) {
+      state.highlights.has(slug) ? state.highlights.delete(slug) : state.highlights.add(slug);
+      saveHL(); renderGrid(); renderFocusRail(); renderStats();
+    }
+    async function renderStats() {
+      const s = await api("api/stats");
+      document.getElementById("healthz-slot").textContent =
+        `${s.key_metric} active · ${s.overdue_total} overdue`;
+      const chips = document.getElementById("lifecycle-chips");
+      chips.innerHTML = `<span class="chip ${state.lifecycle==="all"?"active":""}" data-lc="all">All</span>` +
+        Object.entries(s.by_lifecycle).map(([lc,n]) =>
+          `<span class="chip ${state.lifecycle===lc?"active":""}" data-lc="${esc(lc)}">${esc(lc)} (${esc(n)})</span>`).join("");
+      chips.querySelectorAll("[data-lc]").forEach(el =>
+        el.onclick = () => { state.lifecycle = el.dataset.lc; renderStats(); renderGrid(); });
+      if (state.highlights.size) {
+        const c = document.createElement("span");
+        c.className = "chip active"; c.style.borderColor = "#cba6f7"; c.style.color = "#cba6f7";
+        c.textContent = `★ ${state.highlights.size} highlighted ✕`;
+        c.onclick = () => { state.highlights.clear(); saveHL(); renderGrid(); renderFocusRail(); renderStats(); };
+        chips.appendChild(c);
+      }
+    }
+    async function renderFocusRail() {
+      const rail = document.getElementById("focus-rail");
+      let f;
+      try { f = await api("api/focus"); }
+      catch (e) { rail.innerHTML = ""; return; }
+      const cols = [
+        { key:"today", label:"Today" },
+        { key:"this_week", label:"This Week" },
+        { key:"soon", label:"Soon" },
+        { key:"attention", label:"Needs attention" },
+      ];
+      const hl = state.highlights;
+      const hlTitles = new Set(state.ventures.filter(v => hl.has(v.slug)).map(v => v.title));
+      const keep = it => !hl.size || hl.has(it.venture) || hlTitles.has(it.venture) || hl.has((it.ref || {}).v);
+      const colHtml = c => {
+        const items = (f[c.key] || []).filter(keep);
+        const body = items.length ? items.map((it, i) => `
+          <div class="focus-item" data-go='${esc(JSON.stringify(it.ref||{}))}'>
+            <div class="flex items-center gap-2 text-xs">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:${dotColor(it.priority)}"></span>
+              <span class="flex-1">${esc(it.title)}</span>
+            </div>
+            <div class="text-subtext text-xs ml-4">${esc(it.venture)} · ${esc(it.date)}</div>
+          </div>`).join("")
+          : `<p class="text-subtext text-xs">nothing scheduled</p>`;
+        return `<div class="focus-col">
+          <div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)}</div>
+          <div class="space-y-1">${body}</div>
+        </div>`;
+      };
+      rail.innerHTML = `<div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">` +
+        cols.map(colHtml).join("") + `</div>`;
+      wireGo(rail);
+    }
+    async function renderPortfolio() {
+      document.getElementById("portfolio-cols").classList.remove("hidden");
+      document.getElementById("placeholder").classList.add("hidden");
+      if (!Object.keys(state.identity).length) await loadIdentity();
+      await renderStats();
+      // grid first so state.ventures is populated for the focus-rail highlight filter;
+      // separate columns mean no vertical reflow / flash regardless of order.
+      await renderGrid();
+      renderFocusRail();
+    }
+    function renderStub(label) {
+      document.getElementById("portfolio-cols").classList.add("hidden");
+      renderStats(); // keep header health-slot fresh
+      const ph = document.getElementById("placeholder");
+      ph.classList.remove("hidden");
+      ph.textContent = label + " — coming in the next build";
+    }
+    // ---- shared helpers for the view renderers ----
+    function viewPage() {
+      // Hide the portfolio-only chrome, surface a single content container in #page.
+      document.getElementById("portfolio-cols").classList.add("hidden");
+      document.getElementById("placeholder").classList.add("hidden");
+      renderStats(); // keep header health-slot fresh
+      const main = document.getElementById("page");
+      let host = document.getElementById("view-host");
+      if (!host) {
+        host = document.createElement("div");
+        host.id = "view-host";
+        main.appendChild(host);
+      }
+      host.innerHTML = "";
+      return host;
+    }
+    function parseDate(s) {
+      if (!s) return null;
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
+      if (!m) return null;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function humanize(name) { return String(name).replace(/_/g, " "); }
+
+    // ===================== TIMELINE =====================
+    const tlState = { q:"", types:{milestone:true,deadline:true,task:true},
+                      priority:"all", status:"all", zoom:"month" };
+    let tlData = null;
+    const ZOOM = { day:4, week:2, month:1, quarter:0.6 };
+    function renderTimeline() {
+      const host = viewPage();
+      host.innerHTML = `<div id="tl-wrap"></div>`;
+      if (tlData) { drawTimeline(); return; }
+      api("api/timeline").then(d => { tlData = d; drawTimeline(); })
+        .catch(e => { document.getElementById("tl-wrap").innerHTML =
+          `<p class="text-subtext text-sm">timeline unavailable</p>`; });
+    }
+    function tlGlyph(type) {
+      return type === "milestone" ? "◆" : type === "deadline" ? "⚑" : "●";
+    }
+    function drawTimeline() {
+      const wrap = document.getElementById("tl-wrap");
+      if (!wrap) return;
+      const d = tlData || { lanes: [], range: {} };
+      const range = d.range || {};
+      const minD = parseDate(range.min), maxD = parseDate(range.max);
+      const span = (minD && maxD) ? (maxD.getTime() - minD.getTime()) : 0;
+      const pct = dt => {
+        if (!minD || !maxD || span <= 0) return null;
+        return ((dt.getTime() - minD.getTime()) / span) * 100;
+      };
+      const typeOpts = ["milestone","deadline","task"];
+      const prioOpts = ["all","critical","high","medium","low"];
+      const statusSet = new Set();
+      (d.lanes||[]).forEach(l => (l.items||[]).forEach(it => { if (it.status) statusSet.add(it.status); }));
+      const statusOpts = ["all", ...Array.from(statusSet).sort()];
+
+      const controls = `
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <input id="tl-q" class="input" placeholder="search items…" value="${esc(tlState.q)}" />
+          ${typeOpts.map(t => `<label class="badge" style="cursor:pointer">
+            <input type="checkbox" data-tl-type="${t}" ${tlState.types[t]?"checked":""} style="margin-right:4px"/>${esc(t)}</label>`).join("")}
+          <select id="tl-prio" class="input">${prioOpts.map(p=>`<option value="${esc(p)}" ${tlState.priority===p?"selected":""}>${p==="all"?"all priorities":esc(p)}</option>`).join("")}</select>
+          <select id="tl-status" class="input">${statusOpts.map(s=>`<option value="${esc(s)}" ${tlState.status===s?"selected":""}>${s==="all"?"all status":esc(s)}</option>`).join("")}</select>
+          <span class="text-subtext text-xs ml-2">zoom:</span>
+          ${["day","week","month","quarter"].map(z=>`<span class="chip ${tlState.zoom===z?"active":""}" data-tl-zoom="${z}">${z}</span>`).join("")}
+        </div>`;
+
+      if (!minD || !maxD || span <= 0) {
+        wrap.innerHTML = controls + `<p class="text-subtext text-sm">nothing on the timeline yet</p>`;
+        wireTimelineControls();
+        return;
+      }
+
+      const q = tlState.q.toLowerCase();
+      const keep = it =>
+        tlState.types[it.type] &&
+        (tlState.priority === "all" || (it.priority||"") === tlState.priority) &&
+        (tlState.status === "all" || (it.status||"") === tlState.status) &&
+        (!q || String(it.title||"").toLowerCase().includes(q));
+
+      const trackWidth = Math.round(100 * (ZOOM[tlState.zoom] || 1));
+      const today = new Date(); today.setHours(0,0,0,0);
+      const todayPct = pct(today);
+      const nowLine = (todayPct != null && todayPct >= 0 && todayPct <= 100)
+        ? `<div title="today" style="position:absolute;top:0;bottom:0;left:${todayPct}%;width:1px;background:#cba6f766;z-index:1"></div>` : "";
+
+      const lanesHtml = (d.lanes||[]).map(lane => {
+        const items = (lane.items||[]).filter(it => parseDate(it.date) && keep(it));
+        const marks = items.map(it => {
+          const x = pct(parseDate(it.date));
+          const color = dotColor(it.priority);
+          const tip = esc(it.title) + " · " + esc(it.date) + " · " + esc(it.status||"");
+          const ref = (it.type === "milestone" && it.id)
+            ? { v: lane.venture, m: it.id } : { v: lane.venture };
+          return `<span class="tl-mark" title="${tip}" data-go='${esc(JSON.stringify(ref))}'
+            style="position:absolute;left:${x}%;top:50%;transform:translate(-50%,-50%);color:${color};
+            font-size:0.8rem;line-height:1;cursor:pointer;z-index:2">${tlGlyph(it.type)}</span>`;
+        }).join("");
+        return `<div class="flex items-stretch gap-2 mb-1">
+          <div class="text-xs" style="width:160px;flex:none">
+            <a href="#" class="nav-link" style="padding:6px 8px" data-go='${esc(JSON.stringify({v:lane.venture}))}'>${esc(lane.title||lane.venture)}</a>
+          </div>
+          <div style="flex:1;overflow-x:auto">
+            <div style="position:relative;height:32px;width:${trackWidth}%;min-width:100%;
+              border-bottom:1px solid #313244;background:#181825;border-radius:4px">
+              ${nowLine}${marks}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+
+      const legend = `<div class="text-subtext text-xs mt-3">
+        <span style="color:#cdd6f4">◆</span> milestone &nbsp;
+        <span style="color:#cdd6f4">⚑</span> deadline &nbsp;
+        <span style="color:#cdd6f4">●</span> task &nbsp;·&nbsp;
+        range ${esc(range.min)} → ${esc(range.max)}</div>`;
+
+      wrap.innerHTML = controls + (lanesHtml || `<p class="text-subtext text-sm">no items match the filters</p>`) + legend;
+      wireTimelineControls();
+      wireGo(wrap);
+    }
+    function wireTimelineControls() {
+      const wrap = document.getElementById("tl-wrap");
+      if (!wrap) return;
+      const qel = wrap.querySelector("#tl-q");
+      if (qel) qel.oninput = e => { tlState.q = e.target.value; drawTimeline(); requeryFocus(); };
+      wrap.querySelectorAll("[data-tl-type]").forEach(el =>
+        el.onchange = () => { tlState.types[el.dataset.tlType] = el.checked; drawTimeline(); });
+      const prio = wrap.querySelector("#tl-prio");
+      if (prio) prio.onchange = () => { tlState.priority = prio.value; drawTimeline(); };
+      const st = wrap.querySelector("#tl-status");
+      if (st) st.onchange = () => { tlState.status = st.value; drawTimeline(); };
+      wrap.querySelectorAll("[data-tl-zoom]").forEach(el =>
+        el.onclick = () => { tlState.zoom = el.dataset.tlZoom; drawTimeline(); });
+    }
+    function requeryFocus() {
+      // keep search-box focus across drawTimeline re-renders
+      const qel = document.querySelector("#tl-q");
+      if (qel) { qel.focus(); const v = qel.value; qel.setSelectionRange(v.length, v.length); }
+    }
+
+    // ===================== PRIORITIES =====================
+    async function renderPriorities() {
+      const host = viewPage();
+      let d;
+      try { d = await api("api/priorities"); }
+      catch (e) { host.innerHTML = `<p class="text-subtext text-sm">priorities unavailable</p>`; return; }
+      const items = d.items || [];
+      if (!items.length) { host.innerHTML = `<p class="text-subtext text-sm">no priorities</p>`; return; }
+      const row = it => {
+        const sp = it.score_parts || {};
+        const tip = `urgency ${sp.urgency||0} · manual ${sp.manual||0} · stage ${sp.stage||0} · financial ${sp.financial||0}`;
+        return `<div class="ui-card" style="cursor:pointer" data-go='${esc(JSON.stringify(it.ref||{}))}'>
+          <div class="flex items-center gap-2">
+            <span class="badge" title="${esc(tip)}" style="border-color:${dotColor(it.priority)};color:${dotColor(it.priority)}">${esc(it.score)}</span>
+            <span class="flex-1 text-xs">${esc(it.title)}</span>
+            <span class="badge">${esc(it.kind)}</span>
+          </div>
+          <div class="text-subtext text-xs mt-1 ml-1">
+            <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:it.venture}))}'>${esc(it.venture)}</a>
+            ${it.due ? ` · due ${esc(it.due)}` : ""}
+          </div>
+        </div>`;
+      };
+      const top = items.slice(0, 5);
+      host.innerHTML = `
+        <h2 class="font-pixel text-xs text-mauve mb-2">Top 5</h2>
+        <div class="grid gap-2 mb-5" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${top.map(row).join("")}</div>
+        <h2 class="font-pixel text-xs text-green mb-2">All priorities (${items.length})</h2>
+        <div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${items.map(row).join("")}</div>`;
+      wireGo(host);
+    }
+
+    // ===================== TRENDS =====================
+    function lineChart(points, opts) {
+      opts = opts || {};
+      const W = opts.width || 320, H = opts.height || 120, color = opts.color || "#89b4fa";
+      const label = esc(opts.label || "");
+      const padL = 6, padR = 6, padT = 10, padB = 14;
+      const iw = W - padL - padR, ih = H - padT - padB;
+      const pts = (points || []).filter(p => typeof p.value === "number" && isFinite(p.value));
+      const baseline = `<line x1="${padL}" y1="${padT+ih}" x2="${padL+iw}" y2="${padT+ih}" stroke="#45475a" stroke-width="1"/>
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+ih}" stroke="#45475a" stroke-width="1"/>`;
+      const head = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="background:#181825;border-radius:4px">`;
+      const title = `<text x="${padL}" y="9" fill="#bac2de" font-size="9" font-family="monospace">${label}</text>`;
+      if (pts.length === 0) {
+        return head + baseline + title + `<text x="${padL+4}" y="${padT+ih/2}" fill="#7f849c" font-size="9" font-family="monospace">no data</text></svg>`;
+      }
+      let vmin = Infinity, vmax = -Infinity;
+      pts.forEach(p => { if (p.value < vmin) vmin = p.value; if (p.value > vmax) vmax = p.value; });
+      const range = (vmax - vmin) || 1;
+      const n = pts.length;
+      const xOf = i => padL + (n === 1 ? iw/2 : (i/(n-1))*iw);
+      const yOf = v => padT + ih - ((v - vmin)/range)*ih;
+      const last = pts[n-1];
+      let body;
+      if (n === 1) {
+        body = `<circle cx="${xOf(0)}" cy="${yOf(pts[0].value)}" r="3" fill="${color}"/>`;
+      } else {
+        const poly = pts.map((p,i) => `${xOf(i).toFixed(1)},${yOf(p.value).toFixed(1)}`).join(" ");
+        body = `<polyline points="${poly}" fill="none" stroke="${color}" stroke-width="1.5"/>
+          <circle cx="${xOf(n-1)}" cy="${yOf(last.value)}" r="2.5" fill="${color}"/>`;
+      }
+      const lastTxt = esc(String(last.value));
+      const lx = Math.min(xOf(n-1), W - padR - lastTxt.length*5.2);
+      const lbl = `<text x="${Math.max(padL, lx)}" y="${Math.max(padT+7, yOf(last.value)-4)}" fill="${color}" font-size="9" font-family="monospace">${lastTxt}</text>`;
+      return head + baseline + title + body + lbl + `</svg>`;
+    }
+    async function renderTrends() {
+      const host = viewPage();
+      let d;
+      try { d = await api("api/trends"); }
+      catch (e) { host.innerHTML = `<p class="text-subtext text-sm">trends unavailable</p>`; return; }
+      const series = d.series || {};
+      const derivable = new Set(d.derivable || []);
+      const snapshot = new Set(d.snapshot_based || []);
+
+      const card = name => {
+        const pts = series[name] || [];
+        // ventures_by_stage (and any dict-valued series): render as a stage legend, not a chart.
+        if (pts.length && pts[0].value && typeof pts[0].value === "object") {
+          const latest = pts[pts.length-1];
+          const legend = Object.entries(latest.value || {})
+            .map(([k,v]) => `<span class="badge">${esc(k)}: ${esc(v)}</span>`).join(" ")
+            || `<span class="text-subtext text-xs">no data</span>`;
+          return `<div class="ui-card">
+            <div class="text-xs text-text mb-2">${esc(humanize(name))}</div>
+            <div>${legend}</div>
+            <div class="text-subtext text-xs mt-2">latest snapshot ${esc(latest.date||"")}</div>
+          </div>`;
+        }
+        const svg = lineChart(pts, { label: humanize(name) });
+        let note = "";
+        if (pts.length === 0) note = `<div class="text-subtext text-xs mt-1">no data yet</div>`;
+        else if (pts.length < 2) note = `<div class="text-subtext text-xs mt-1">data starts ${esc(pts[0].date||"")}</div>`;
+        return `<div class="ui-card">${svg}${note}</div>`;
+      };
+
+      const group = (title, names) => {
+        const present = names.filter(n => n in series);
+        if (!present.length) return "";
+        return `<h2 class="font-pixel text-xs text-mauve mb-2 mt-1">${esc(title)}</h2>
+          <div class="grid gap-3 mb-5" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
+            ${present.map(card).join("")}</div>`;
+      };
+      // any series not classified falls into a misc group
+      const classified = new Set([...derivable, ...snapshot]);
+      const misc = Object.keys(series).filter(n => !classified.has(n));
+      host.innerHTML =
+        group("Derived from current data", [...derivable]) +
+        group("Tracked over time", [...snapshot]) +
+        (misc.length ? group("Other", misc) : "") ||
+        `<p class="text-subtext text-sm">no trend data yet</p>`;
+    }
+    async function renderGrid() {
+      let items = await api("api/list");
+      state.ventures = items;
+      if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
+      if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
+      const anyHL = state.highlights.size > 0;
+      document.getElementById("grid").innerHTML = items.map(i => {
+        const id = ident(i.slug), col = id.colour || "#9399b2";
+        const cls = state.highlights.has(i.slug) ? "hl" : (anyHL ? "dim" : "");
+        return `
+        <div class="ui-card cursor-pointer ${cls}" data-slug="${esc(i.slug)}" style="border-left:4px solid ${col};--hl:${col}">
+          <div class="flex items-start gap-2">
+            <span class="text-sm leading-none">${id.emoji || ""}</span>
+            <div class="flex-1 min-w-0">
+              <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
+              <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
+            </div>
+            <span class="open-btn text-xs text-subtext" data-open="${esc(i.slug)}" title="open full">↗</span>
+          </div>
+          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
+        </div>`; }).join("");
+      const grid = document.getElementById("grid");
+      grid.querySelectorAll(".ui-card").forEach(el => el.onclick = (e) => {
+        if (e.target.closest("[data-open]")) return;     // click = toggle highlight (filter), not navigate
+        toggleHighlight(el.dataset.slug);
+      });
+      grid.querySelectorAll("[data-open]").forEach(el => el.onclick = (e) => {
+        e.stopPropagation(); go({ v: el.dataset.open });  // ↗ opens the full venture page
+      });
+    }
+    function backBar(crumbs) {
+      return `<div class="mb-4 text-xs text-subtext">` +
+        crumbs.map(c => c.href !== undefined
+          ? `<a href="#" class="text-blue" data-go='${esc(JSON.stringify(c.href))}'>${esc(c.label)}</a>`
+          : esc(c.label)).join(" › ") + `</div>`;
+    }
+    function wireGo(scope) {
+      scope.querySelectorAll("[data-go]").forEach(el =>
+        el.onclick = e => { e.preventDefault(); go(JSON.parse(el.dataset.go)); });
+    }
+    function taskList(tasks) {
+      if (!tasks || !tasks.length) return `<p class="text-subtext text-xs">no linked tasks yet</p>`;
+      const dot = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
+      return `<div class="space-y-1">` + tasks.map(t=>`
+        <div class="flex items-center gap-2 text-xs">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot(t.priority)}"></span>
+          <span class="text-subtext">#${esc(t.id)}</span>
+          <span class="flex-1">${esc(t.title)}</span>
+          <span class="badge">${esc(t.status)}</span>
+          ${t.due?`<span class="text-subtext">${esc(t.due)}</span>`:""}
+        </div>`).join("") + `</div>`;
+    }
+    function enterDetail() {
+      document.getElementById("page").classList.add("hidden");
+      document.getElementById("page-nav").classList.add("hidden");
+      const d = document.getElementById("detail");
+      d.className = "flex-1 p-4"; d.classList.remove("hidden"); return d;
+    }
+    async function renderVenture(slug) {
+      const v = await api("api/venture/" + encodeURIComponent(slug));
+      const d = enterDetail();
+      if (v.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Venture not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(v.title)}</h1>
+        <div class="text-subtext text-xs mb-3">${esc(v.stage)} · ${esc(v.priority)}</div>
+        <p class="text-xs mb-4">${esc(v.description||"")}</p>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones</h2>
+        ${(v.milestones||[]).map(m=>`<div class="text-xs mb-1 ${m.completed?'line-through text-subtext':''}">
+            <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,m:m.id}))}'>${esc(m.title||m.id)}</a>
+            <span class="badge ml-2">${esc(m.status||"")}</span></div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(v.tasks)}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Links &amp; Repos</h2>
+        ${Object.entries(v.links||{}).map(([k,val])=>`<div class="text-xs"><span class="text-subtext">${esc(k)}:</span> ${/^https?:/.test(String(val))?`<a class="text-blue" href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a>`:esc(val)}</div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Financial</h2>
+        ${v.financial&&Object.keys(v.financial).length?`<div class="text-xs">revenue to date: ${esc(v.financial.revenue_to_date??"—")} ${esc(v.financial.currency||"")}</div>`:`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Team</h2>
+        ${(v.co_venturers||[]).map(c=>`<span class="badge">${esc(c.name)} — ${esc(c.role||"")}</span>`).join(" ")||`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Projects</h2>
+        ${(v.projects||[]).map(p=>`<div class="text-xs"><a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,p:p.slug}))}'>${esc(p.slug)}</a> — ${esc(p.objective||"")}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}`;
+      wireGo(d);
+    }
+    async function renderProject(slug) {
+      const p = await api("api/project/" + encodeURIComponent(slug));
+      const d = enterDetail();
+      if (p.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Project not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:p.venture},{label:p.slug}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(p.slug)}</h1>
+        <div class="text-subtext text-xs mb-3">venture: ${esc(p.venture)}</div>
+        <p class="text-xs mb-4">${esc(p.objective||"")}</p>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones</h2>
+        ${(p.milestones||[]).map(m=>`<div class="text-xs mb-1 ${m.done?'line-through text-subtext':''}">${esc(m.title)}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(p.tasks)}`;
+      wireGo(d);
+    }
+    async function renderMilestone(v, m) {
+      const ms = await api("api/milestone/" + encodeURIComponent(v) + "/" + encodeURIComponent(m));
+      const d = enterDetail();
+      if (ms.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Milestone not found.</p>`; wireGo(d); return; }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:ms.venture_title||v,href:{v:v}},{label:ms.title||m}]) + `
+        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(ms.title||m)}</h1>
+        <div class="text-subtext text-xs mb-3">${esc(ms.status||"")}</div>
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Deliverables</h2>
+        ${(ms.deliverables||[]).map(x=>`<div class="text-xs">• ${esc(x)}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}
+        ${ms.notes?`<h2 class="font-pixel text-xs text-green mt-4 mb-2">Notes</h2><p class="text-xs whitespace-pre-wrap">${esc(ms.notes)}</p>`:""}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(ms.tasks)}`;
+      wireGo(d);
+    }
+    document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
+    state.highlights = loadHL();
+    route();
+  </script>
+</body>
+</html>

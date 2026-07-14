@@ -4,3 +4,4 @@ bun.lock
 *.log
 .DS_Store
 .letta/
+__pycache__/
