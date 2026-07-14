@@ -84,6 +84,15 @@ def main():
                 for dl in data.get("deadlines", []):
                     if not isinstance(dl, dict) or "date" not in dl:
                         continue
+                    # Terminal statuses silence the deadline; anything open
+                    # (active/pending/blocked-*/missed-needs-redate/absent)
+                    # still surfaces. Without this, evidence-annotated
+                    # completions scream OVERDUE forever (2026-07-13 sweep).
+                    if str(dl.get("status", "")).lower() in (
+                        "complete", "completed", "met", "done",
+                        "past", "superseded", "cancelled",
+                    ):
+                        continue
                     dl_date = dl["date"]
                     if isinstance(dl_date, str):
                         dl_date = date.fromisoformat(dl_date)
