@@ -138,6 +138,68 @@ describe("ProjectStore.list", () => {
     expect(list).toHaveLength(1);
     expect(list[0].slug).toBe("alife");
   });
+
+  test("sort_by priority desc surfaces highest priority first (not lowest)", async () => {
+    const base: CreateProjectInput = {
+      slug: "x",
+      name: "x",
+      venture: "bcrg",
+      stage: "active",
+      owner: "shawn",
+      co_owners: [],
+      stakeholders: [],
+      milestones: [],
+      priority: "none",
+    };
+    await store.create({ ...base, slug: "crit", priority: "critical" });
+    await store.create({ ...base, slug: "none", priority: "none" });
+    await store.create({ ...base, slug: "low", priority: "low" });
+
+    const desc = await store.list({
+      filter: { venture: "bcrg" },
+      sort_by: "priority",
+      sort_order: "desc",
+    });
+    // Regression: desc used to sort by a 0=critical..4=none rank ascending,
+    // which put "none" first. It must put "critical" first.
+    expect(desc.map((p) => p.slug)).toEqual(["crit", "low", "none"]);
+
+    const asc = await store.list({
+      filter: { venture: "bcrg" },
+      sort_by: "priority",
+      sort_order: "asc",
+    });
+    expect(asc.map((p) => p.slug)).toEqual(["none", "low", "crit"]);
+  });
+
+  test("calculated_priority weighs overdue deadline above a merely high-tagged item", async () => {
+    const base: CreateProjectInput = {
+      slug: "x",
+      name: "x",
+      venture: "bcrg",
+      stage: "active",
+      owner: "shawn",
+      co_owners: [],
+      stakeholders: [],
+      milestones: [],
+      priority: "none",
+    };
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await store.create({ ...base, slug: "overdue-low", priority: "low", deadline: yesterday });
+    await store.create({ ...base, slug: "high-no-deadline", priority: "high" });
+
+    const list = await store.list({
+      filter: { venture: "bcrg" },
+      sort_by: "priority",
+      sort_order: "desc",
+    });
+
+    expect(list.map((p) => p.slug)).toEqual(["overdue-low", "high-no-deadline"]);
+    // overdue urgency (100 * 0.6) + low tag (25 * 0.4) = 70
+    expect(list[0].calculated_priority).toBe(70);
+    // no deadline (0 * 0.6) + high tag (75 * 0.4) = 30
+    expect(list[1].calculated_priority).toBe(30);
+  });
 });
 
 describe("ProjectStore.update", () => {
