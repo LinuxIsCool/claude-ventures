@@ -29,6 +29,7 @@ export interface MilestoneV2 {
   target: string;                  // human-readable target description
   deadline?: string;               // ISO date
   exit_criteria: string[];         // checklist items for completion
+  calculated_priority?: number;    // 0-100, computed at list-time — see priority/item-priority.ts
   docs_dir?: string;
   tasks: number[];                 // claude-backlog task IDs (auto-derived from FK back-refs)
   notes?: string;                  // markdown body

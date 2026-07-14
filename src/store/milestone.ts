@@ -20,6 +20,7 @@ import type {
   MilestoneFilter,
 } from "../types/milestone-v2";
 import { isValidSlugSegment } from "../utils/composite-slug";
+import { calculateItemPriority } from "../priority/item-priority";
 
 export interface MilestoneStoreOptions {
   ventures_root: string;
@@ -121,9 +122,23 @@ export class MilestoneStore {
       }
     }
 
+    // Compute calculated_priority (deadline urgency + manual tag) for every
+    // returned milestone, mirroring venture.calculated_priority's field
+    // name/shape. Milestones have no deadline-inheritance-from-project
+    // mechanism elsewhere in this codebase, so this uses the milestone's own
+    // `deadline` field only — same as the existing due_within_days/overdue
+    // filters above.
+    const now = new Date();
+    const scores = new Map<MilestoneV2, number>(
+      milestones.map((m) => [m, calculateItemPriority(m.priority, m.deadline, now)])
+    );
+    for (const m of milestones) {
+      m.calculated_priority = scores.get(m);
+    }
+
     if (query.sort_by) {
       const dir = query.sort_order === "desc" ? -1 : 1;
-      milestones.sort((a, b) => this.compareBy(a, b, query.sort_by!) * dir);
+      milestones.sort((a, b) => this.compareBy(a, b, query.sort_by!, scores) * dir);
     }
     const offset = query.offset ?? 0;
     const limit = query.limit ?? milestones.length;
@@ -172,7 +187,18 @@ export class MilestoneStore {
     return true;
   }
 
-  private compareBy(a: MilestoneV2, b: MilestoneV2, field: string): number {
+  // NOTE: sort direction — `scores` is ascending-natural (higher score =
+  // higher priority). With dir=1 (asc, default) low-priority-first, dir=-1
+  // (desc) high-priority-first, matching venture_list's convention. Fixed
+  // 2026-07-13: previously used a 0=critical..4=none manual-tag rank here,
+  // which put desc backwards (low/none priority surfaced first) and ignored
+  // deadlines entirely.
+  private compareBy(
+    a: MilestoneV2,
+    b: MilestoneV2,
+    field: string,
+    scores: Map<MilestoneV2, number>
+  ): number {
     switch (field) {
       case "name":
         return a.name.localeCompare(b.name);
@@ -184,12 +210,8 @@ export class MilestoneStore {
         return (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999");
       case "priority":
       default:
-        return this.priorityRank(a.priority) - this.priorityRank(b.priority);
+        return (scores.get(a) ?? 0) - (scores.get(b) ?? 0);
     }
-  }
-
-  private priorityRank(p: string): number {
-    return ({ critical: 0, high: 1, medium: 2, low: 3, none: 4 } as Record<string, number>)[p] ?? 4;
   }
 
   private parse(content: string, filePath: string): MilestoneV2 {

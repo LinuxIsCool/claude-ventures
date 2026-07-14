@@ -27,6 +27,7 @@ export interface Project {
   stakeholders: string[];          // FK to people
   deadline?: string;               // ISO date
   milestones: string[];            // list of local milestone slugs
+  calculated_priority?: number;    // 0-100, computed at list-time — see priority/item-priority.ts
   docs_dir?: string;
   notes?: string;                  // markdown body
   created_at: string;
