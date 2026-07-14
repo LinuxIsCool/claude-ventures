@@ -21,6 +21,10 @@
   .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
+  .ui-card.dim { opacity:.34; filter:grayscale(.55); }
+  .ui-card.hl  { box-shadow:0 0 0 2px var(--hl,#cba6f7); }
+  .ui-card .open-btn { opacity:0; transition:opacity .12s; cursor:pointer; }
+  .ui-card:hover .open-btn { opacity:.85; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -41,9 +45,13 @@
   <div class="flex">
     <aside id="page-nav" class="w-48 p-3 border-r border-overlay"></aside>
     <main id="page" class="flex-1 p-3">
-      <div id="focus-rail"></div>
-      <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
-      <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))"></div>
+      <div id="portfolio-cols" class="flex gap-4 items-start">
+        <div class="flex-1 min-w-0">
+          <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
+          <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+        </div>
+        <aside id="focus-rail" class="w-72 flex-none"></aside>
+      </div>
       <div id="placeholder" class="hidden text-subtext text-sm p-6"></div>
     </main>
     <section id="detail" class="w-96 p-3 border-l border-overlay hidden"></section>
@@ -51,7 +59,7 @@
 
   <script src="static/embedded-bar.js"></script>
   <script>
-    const state = { lifecycle: "all", q: "", view: "portfolio" };
+    const state = { lifecycle: "all", q: "", view: "portfolio", highlights: new Set(), identity: {}, ventures: [] };
     const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
     const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
@@ -103,6 +111,16 @@
       return { active:"text-green", exploring:"text-blue",
                dormant:"text-subtext", harvesting:"text-yellow" }[lc] || "text-text";
     }
+    // ---- identity (emoji + colour) + persistent multi-select highlight filter ----
+    const HL_KEY = "ventures.highlights";
+    function loadHL() { try { return new Set(JSON.parse(localStorage.getItem(HL_KEY) || "[]")); } catch (e) { return new Set(); } }
+    function saveHL() { localStorage.setItem(HL_KEY, JSON.stringify([...state.highlights])); }
+    async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
+    function ident(slug) { return state.identity[slug] || {}; }
+    function toggleHighlight(slug) {
+      state.highlights.has(slug) ? state.highlights.delete(slug) : state.highlights.add(slug);
+      saveHL(); renderGrid(); renderFocusRail(); renderStats();
+    }
     async function renderStats() {
       const s = await api("api/stats");
       document.getElementById("healthz-slot").textContent =
@@ -113,6 +131,13 @@
           `<span class="chip ${state.lifecycle===lc?"active":""}" data-lc="${esc(lc)}">${esc(lc)} (${esc(n)})</span>`).join("");
       chips.querySelectorAll("[data-lc]").forEach(el =>
         el.onclick = () => { state.lifecycle = el.dataset.lc; renderStats(); renderGrid(); });
+      if (state.highlights.size) {
+        const c = document.createElement("span");
+        c.className = "chip active"; c.style.borderColor = "#cba6f7"; c.style.color = "#cba6f7";
+        c.textContent = `★ ${state.highlights.size} highlighted ✕`;
+        c.onclick = () => { state.highlights.clear(); saveHL(); renderGrid(); renderFocusRail(); renderStats(); };
+        chips.appendChild(c);
+      }
     }
     async function renderFocusRail() {
       const rail = document.getElementById("focus-rail");
@@ -125,8 +150,11 @@
         { key:"soon", label:"Soon" },
         { key:"attention", label:"Needs attention" },
       ];
+      const hl = state.highlights;
+      const hlTitles = new Set(state.ventures.filter(v => hl.has(v.slug)).map(v => v.title));
+      const keep = it => !hl.size || hl.has(it.venture) || hlTitles.has(it.venture) || hl.has((it.ref || {}).v);
       const colHtml = c => {
-        const items = (f[c.key] || []);
+        const items = (f[c.key] || []).filter(keep);
         const body = items.length ? items.map((it, i) => `
           <div class="focus-item" data-go='${esc(JSON.stringify(it.ref||{}))}'>
             <div class="flex items-center gap-2 text-xs">
@@ -146,18 +174,17 @@
       wireGo(rail);
     }
     async function renderPortfolio() {
-      document.getElementById("focus-rail").classList.remove("hidden");
-      document.getElementById("lifecycle-chips").classList.remove("hidden");
-      document.getElementById("grid").classList.remove("hidden");
+      document.getElementById("portfolio-cols").classList.remove("hidden");
       document.getElementById("placeholder").classList.add("hidden");
+      if (!Object.keys(state.identity).length) await loadIdentity();
       await renderStats();
+      // grid first so state.ventures is populated for the focus-rail highlight filter;
+      // separate columns mean no vertical reflow / flash regardless of order.
+      await renderGrid();
       renderFocusRail();
-      renderGrid();
     }
     function renderStub(label) {
-      document.getElementById("focus-rail").classList.add("hidden");
-      document.getElementById("lifecycle-chips").classList.add("hidden");
-      document.getElementById("grid").classList.add("hidden");
+      document.getElementById("portfolio-cols").classList.add("hidden");
       renderStats(); // keep header health-slot fresh
       const ph = document.getElementById("placeholder");
       ph.classList.remove("hidden");
@@ -166,9 +193,7 @@
     // ---- shared helpers for the view renderers ----
     function viewPage() {
       // Hide the portfolio-only chrome, surface a single content container in #page.
-      document.getElementById("focus-rail").classList.add("hidden");
-      document.getElementById("lifecycle-chips").classList.add("hidden");
-      document.getElementById("grid").classList.add("hidden");
+      document.getElementById("portfolio-cols").classList.add("hidden");
       document.getElementById("placeholder").classList.add("hidden");
       renderStats(); // keep header health-slot fresh
       const main = document.getElementById("page");
@@ -423,16 +448,33 @@
     }
     async function renderGrid() {
       let items = await api("api/list");
+      state.ventures = items;
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
       if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
-      document.getElementById("grid").innerHTML = items.map(i => `
-        <div class="ui-card cursor-pointer" data-slug="${esc(i.slug)}">
-          <div class="font-pixel text-xs ${lifecycleColor(i.lifecycle)}">${esc(i.title)}</div>
-          <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
+      const anyHL = state.highlights.size > 0;
+      document.getElementById("grid").innerHTML = items.map(i => {
+        const id = ident(i.slug), col = id.colour || "#9399b2";
+        const cls = state.highlights.has(i.slug) ? "hl" : (anyHL ? "dim" : "");
+        return `
+        <div class="ui-card cursor-pointer ${cls}" data-slug="${esc(i.slug)}" style="border-left:4px solid ${col};--hl:${col}">
+          <div class="flex items-start gap-2">
+            <span class="text-sm leading-none">${id.emoji || ""}</span>
+            <div class="flex-1 min-w-0">
+              <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
+              <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
+            </div>
+            <span class="open-btn text-xs text-subtext" data-open="${esc(i.slug)}" title="open full">↗</span>
+          </div>
           ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
-        </div>`).join("");
-      document.querySelectorAll("[data-slug]").forEach(el =>
-        el.onclick = () => go({ v: el.dataset.slug }));
+        </div>`; }).join("");
+      const grid = document.getElementById("grid");
+      grid.querySelectorAll(".ui-card").forEach(el => el.onclick = (e) => {
+        if (e.target.closest("[data-open]")) return;     // click = toggle highlight (filter), not navigate
+        toggleHighlight(el.dataset.slug);
+      });
+      grid.querySelectorAll("[data-open]").forEach(el => el.onclick = (e) => {
+        e.stopPropagation(); go({ v: el.dataset.open });  // ↗ opens the full venture page
+      });
     }
     function backBar(crumbs) {
       return `<div class="mb-4 text-xs text-subtext">` +
@@ -512,6 +554,7 @@
       wireGo(d);
     }
     document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
+    state.highlights = loadHL();
     route();
   </script>
 </body>

@@ -1,0 +1,50 @@
+{
+  "bcrg": {
+    "emoji": "💧",
+    "colour": "#56c2e9"
+  },
+  "cascadia-systems": {
+    "emoji": "🏝️",
+    "colour": "#e9cb9b"
+  },
+  "ecoscene-oasis": {
+    "emoji": "🌻",
+    "colour": "#f2ce51"
+  },
+  "indigenomics-ai": {
+    "emoji": "🦅",
+    "colour": "#eaa35a"
+  },
+  "koi-protocol": {
+    "emoji": "🪢",
+    "colour": "#c4b78f"
+  },
+  "kwaxala": {
+    "emoji": "🪨",
+    "colour": "#9d97b9"
+  },
+  "legion": {
+    "emoji": "⚔️",
+    "colour": "#8daaeb"
+  },
+  "longtail-financial": {
+    "emoji": "🦎",
+    "colour": "#7cc78d"
+  },
+  "personal": {
+    "emoji": "🫀",
+    "colour": "#f0738f"
+  },
+  "regen-ai": {
+    "emoji": "🌱",
+    "colour": "#a4d454"
+  },
+  "salish-sea-dreaming": {
+    "emoji": "🐟",
+    "colour": "#55d4ca"
+  },
+  "symbiocene-labs": {
+    "emoji": "🍀",
+    "colour": "#56e28e"
+  }
+}
