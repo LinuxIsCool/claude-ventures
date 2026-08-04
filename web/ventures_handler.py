@@ -7,6 +7,7 @@ from urllib.parse import unquote, urlparse
 from claude_webui import WebuiKernel
 from claude_webui.kernel import WebuiHandler
 
+import ventures_contract
 import ventures_detail
 import ventures_focus
 import ventures_timeline
@@ -23,6 +24,12 @@ class VenturesHandler(WebuiHandler):
         vroot = self.ventures_root
         bl = self.backlog_dir
         try:
+            if path == "/api/bands":
+                # The render manifest. Served from the same file the contract
+                # test reads, so the page and the check cannot disagree.
+                self._send_json(ventures_contract.load_manifest()); return
+            if path == "/api/contract":
+                self._send_json(ventures_contract.report(vroot)); return
             if path == "/api/focus":
                 self._send_json(ventures_focus.buckets(vroot, bl, date.today())); return
             if path == "/api/timeline":

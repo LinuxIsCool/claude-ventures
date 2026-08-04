@@ -1,0 +1,200 @@
+{
+  "_comment": [
+    "The venture detail page, declared as data. This file is the SINGLE source",
+    "of truth for what the page reads: the frontend iterates `bands` to render,",
+    "and ventures_contract.py checks the same array against the real store in",
+    "both directions. A declaration the page does not use would be a comment,",
+    "and comments rot -- so removing a path from `reads` removes it from the",
+    "page, for every band whose renderer is not `custom`.",
+    "",
+    "renderer:  kv     label/value rows resolved from `reads`   (load-bearing)",
+    "           table  one row per array item, columns = reads  (load-bearing)",
+    "           chips  compact badges from `reads`              (load-bearing)",
+    "           custom bespoke JS; `reads` is declared but NOT enforced by",
+    "                  rendering, and ventures_contract reports it as such",
+    "",
+    "tail:      'financial.*' claims everything under that prefix the band did",
+    "           not name, so a venture can invent a key without it being",
+    "           dropped. The bare '*' catch-all is special: paths only it",
+    "           claims are reported as `uncategorized` rather than covered, so",
+    "           it cannot silently disable the orphan check."
+  ],
+
+  "ignored": {
+    "id": "the routing slug; it is the page's identity, not a field on it",
+    "created_at": "folded into the record-freshness stamp in the identity band",
+    "updated_at": "folded into the record-freshness stamp in the identity band",
+    "calculated_priority": "rendered as the priority score, not as a raw row"
+  },
+
+  "bands": [
+    {
+      "key": "identity",
+      "title": null,
+      "renderer": "custom",
+      "empty_reason_when": "never",
+      "reads": [
+        "title",
+        "description",
+        "stage",
+        "priority",
+        "type",
+        "tags[]",
+        "notes",
+        "started_at"
+      ]
+    },
+    {
+      "key": "deadlines",
+      "title": "Deadlines",
+      "renderer": "table",
+      "columns": ["date", "label", "type", "status"],
+      "reads": [
+        "deadlines[].date",
+        "deadlines[].label",
+        "deadlines[].type",
+        "deadlines[].status",
+        "deadlines[].note",
+        "deadlines[].notes",
+        "deadlines[].title",
+        "deadlines[].id",
+        "deadlines[].met_date",
+        "deadlines[].met_evidence"
+      ]
+    },
+    {
+      "key": "milestones",
+      "title": "Milestones",
+      "renderer": "custom",
+      "reads": [
+        "milestones[].id",
+        "milestones[].title",
+        "milestones[].status",
+        "milestones[].completed",
+        "milestones[].completed_at",
+        "milestones[].completed_date",
+        "milestones[].notes",
+        "milestones[].description",
+        "milestones[].deliverables[]",
+        "milestones[].date",
+        "milestones[].date_window",
+        "milestones[].deadline.date",
+        "milestones[].deadline.type",
+        "milestones[].owner",
+        "milestones[].started_at",
+        "milestones[].paywall"
+      ]
+    },
+    {
+      "key": "projects",
+      "title": "Projects",
+      "renderer": "custom",
+      "reads": ["projects"]
+    },
+    {
+      "key": "tasks",
+      "title": "Tasks",
+      "renderer": "custom",
+      "reads": [],
+      "source": "claude-backlog, joined on venture slug and composite parent_id"
+    },
+    {
+      "key": "financial",
+      "title": "Financial",
+      "renderer": "custom",
+      "tail": "financial.*",
+      "reads": [
+        "financial.status",
+        "financial.total_invoiced.amount",
+        "financial.total_invoiced.currency",
+        "financial.total_received.amount",
+        "financial.total_received.currency",
+        "financial.outstanding.amount",
+        "financial.outstanding.currency",
+        "financial.notes",
+        "financial.billing_contact",
+        "financial.invoicing_entity",
+        "financial.invoices[].id",
+        "financial.invoices[].amount",
+        "financial.invoices[].currency",
+        "financial.invoices[].description",
+        "financial.invoices[].status",
+        "financial.invoices[].issued",
+        "financial.invoices[].due",
+        "financial.invoices[].pdf",
+        "financial.invoices[].paid_date"
+      ]
+    },
+    {
+      "key": "team",
+      "title": "Team",
+      "renderer": "chips",
+      "reads": [
+        "co_venturers[].name",
+        "co_venturers[].role",
+        "co_venturers[].company",
+        "co_venturers[].email",
+        "co_venturers[].contact",
+        "co_venturers[].channels[]",
+        "co_venturers[].location",
+        "co_venturers[].notes",
+        "stakeholders",
+        "personas"
+      ]
+    },
+    {
+      "key": "meetings",
+      "title": "Standing meetings",
+      "renderer": "table",
+      "columns": ["name", "schedule", "platform"],
+      "reads": [
+        "meetings[].name",
+        "meetings[].schedule",
+        "meetings[].platform",
+        "meetings[].standing",
+        "meetings[].standing_link",
+        "meetings[].notes"
+      ]
+    },
+    {
+      "key": "links",
+      "title": "Links & Repos",
+      "renderer": "kv",
+      "tail": "links.*",
+      "reads": ["links[].label", "links[].url"]
+    },
+    {
+      "key": "relations",
+      "title": "Related ventures",
+      "renderer": "chips",
+      "reads": [
+        "related_ventures[]",
+        "parent_ventures",
+        "child_ventures",
+        "co_ventures"
+      ]
+    },
+    {
+      "key": "legal",
+      "title": "Legal",
+      "renderer": "kv",
+      "tail": "legal.*",
+      "reads": []
+    },
+    {
+      "key": "data",
+      "title": "Sources & paths",
+      "renderer": "kv",
+      "tail": "data.*",
+      "reads": []
+    },
+    {
+      "key": "other",
+      "title": "Other record fields",
+      "renderer": "kv",
+      "tail": "*",
+      "reads": [],
+      "note": "Catch-all so nothing is dropped. Anything landing here is reported as `uncategorized` by ventures_contract and wants a real home."
+    }
+  ]
+}

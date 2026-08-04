@@ -77,11 +77,32 @@ deliverables:                      # Optional
     status: in_progress
 
 financial:                         # Optional
-  invoices: [...]
-  revenue_to_date: 10000
-  currency: CAD
+  status: contracted
+  total_invoiced: { amount: 10000, currency: CAD }
+  total_received: { amount: 8000, currency: CAD }
+  outstanding:    { amount: 2000, currency: CAD }
+  invoices:
+    - id: LTF-XXX-001              # id/amount/currency/description/status are
+      amount: 10000                # the core every invoice has; issued/due/pdf
+      currency: CAD                # are near-universal; anything else is a tail
+      description: "Phase 1"
+      status: paid                 # drafted | sent | paid
+      issued: 2026-03-16
+      due: 2026-03-31
 ---
 ```
+
+> **`revenue_to_date` is not a real key.** This doc previously showed it, the
+> webui rendered it, a test fixture asserted it, and no venture file has ever
+> contained it, so the Financial section printed an em-dash for every venture
+> for months while the suite stayed green. Keys are checked against the store
+> in both directions by `web/ventures_contract.py`; run `web/run-tests.sh`
+> before adding one here.
+
+Financial blocks vary a lot between ventures (Longtail carries tax and cap-table
+fields, CIE carries funder and budget-split fields). The webui renders the core
+above structurally and everything else generically, so a venture-specific key is
+shown rather than dropped. Declare new shared keys in `web/venture_bands.json`.
 
 ### Canonical Counts
 

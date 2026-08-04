@@ -71,7 +71,15 @@ def _mk_full_store(tmp_path: Path) -> tuple[Path, Path]:
         "description: Validator research.\n"
         "co_venturers:\n  - name: Shawn\n    role: Lead\n"
         "milestones:\n  - id: ms1\n    title: Phase 2\n    status: complete\n    completed: true\n    deliverables: [x]\n"
-        "financial:\n  revenue_to_date: 50000\n  currency: CAD\n"
+        # Real schema. This fixture previously wrote `financial.revenue_to_date`,
+        # a key NO venture file has ever contained, and asserted the payload
+        # returned it. That is why the suite stayed green while the Financial
+        # section rendered an em-dash for every venture in the store.
+        "financial:\n  status: contracted\n"
+        "  total_invoiced:\n    amount: 50000\n    currency: CAD\n"
+        "  invoices:\n    - id: INV-001\n      amount: 50000\n      currency: CAD\n"
+        "      description: Phase 2\n      status: paid\n      issued: 2026-01-05\n"
+        "deadlines:\n  - date: 2026-12-01\n    label: Renewal\n    type: hard\n"
         "links:\n  github: https://github.com/x\n"
         "---\nbody\n"
     )
@@ -86,10 +94,58 @@ def test_venture_detail_assembles(tmp_path: Path):
     d = ventures_detail.venture("bcrg", ventures_root=vroot, backlog_dir=bl)
     assert d["title"] == "BCRG"
     assert d["milestones"][0]["id"] == "ms1"
-    assert d["financial"]["revenue_to_date"] == 50000
+    assert d["financial"]["total_invoiced"]["amount"] == 50000
+    assert d["financial"]["invoices"][0]["id"] == "INV-001"
     assert d["links"]["github"] == "https://github.com/x"
     assert [t["title"] for t in d["tasks"]] == ["Do thing"]
     assert d["co_venturers"][0]["name"] == "Shawn"
+
+
+def test_venture_detail_includes_deadlines(tmp_path: Path):
+    """Regression: `deadlines` was parsed by the accessor and then dropped by
+    the payload assembler, so the page could not render the field that matters
+    most. It must survive the whole path."""
+    vroot, bl = _mk_full_store(tmp_path)
+    d = ventures_detail.venture("bcrg", ventures_root=vroot, backlog_dir=bl)
+    assert d["deadlines"][0]["date"] == "2026-12-01"
+    assert d["deadlines"][0]["label"] == "Renewal"
+
+
+def test_structured_project_tree_is_discovered(tmp_path: Path):
+    """Regression: projects were read from project-mirror/ only, so the real
+    per-venture trees rendered as 'none'. Both formats must be found, and the
+    structured one must parse as YAML rather than through the prose regexes."""
+    vroot = tmp_path / "ventures"
+    msdir = vroot / "acme" / "projects" / "build-it" / "milestones"
+    msdir.mkdir(parents=True)
+    (vroot / "acme" / "projects" / "build-it" / "project.md").write_text(
+        "---\nslug: build-it\nname: Build It\nventure: acme\nstage: active\n"
+        "priority: high\nowner: shawn\nmilestones:\n  - m1\n---\n", encoding="utf-8")
+    (msdir / "m1.md").write_text(
+        "---\nslug: m1\nname: First cut\nproject: build-it\nventure: acme\n"
+        "stage: active\ndeadline: '2026-09-01'\n---\n", encoding="utf-8")
+
+    lst = ventures_projects.list_for("acme", ventures_root=vroot)
+    assert [p["slug"] for p in lst] == ["build-it"]
+    assert lst[0]["name"] == "Build It"
+    assert lst[0]["format"] == "structured"
+    assert lst[0]["milestones"][0]["title"] == "First cut"
+    assert lst[0]["milestones"][0]["deadline"] == "2026-09-01"
+
+
+def test_projects_are_deduped_across_slug_and_title(tmp_path: Path):
+    """venture() looks up by slug AND by title; a project matching both must
+    appear once, not twice."""
+    vroot = tmp_path / "ventures"
+    (vroot / "active").mkdir(parents=True)
+    (vroot / "active" / "acme.md").write_text(
+        "---\nid: acme\ntitle: acme\nstage: active\npriority: low\n---\n", encoding="utf-8")
+    pdir = vroot / "acme" / "projects" / "solo"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: solo\nname: Solo\nventure: acme\n---\n", encoding="utf-8")
+    d = ventures_detail.venture("acme", ventures_root=vroot, backlog_dir=tmp_path)
+    assert [p["slug"] for p in d["projects"]] == ["solo"]
 
 
 def test_venture_detail_not_found(tmp_path: Path):

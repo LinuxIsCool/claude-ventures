@@ -10,10 +10,12 @@ from ventures_accessor import VenturesAccessor
 
 
 def _venture_record(slug: str, ventures_root: Path | None):
+    # Use the accessor's cached _records() rather than re-globbing and
+    # re-parsing every venture file on every detail request, which is what the
+    # previous _iter_files()/_parse() loop did.
     acc = VenturesAccessor(data_root=ventures_root)
-    for lifecycle, md in acc._iter_files():
-        v = acc._parse(lifecycle, md)
-        if v and v["slug"] == slug:
+    for v in acc._records():
+        if v["slug"] == slug:
             return v
     return None
 
@@ -22,18 +24,23 @@ def venture(slug: str, ventures_root: Path | None = None, backlog_dir: Path | No
     v = _venture_record(slug, ventures_root)
     if v is None:
         return {"error": "not found", "slug": slug}
-    return {
-        "slug": v["slug"], "title": v["title"], "description": v.get("description", ""),
-        "stage": v.get("stage"), "priority": v.get("priority"), "lifecycle": v.get("lifecycle"),
-        "milestones": v.get("milestones", []),
-        "financial": v.get("financial", {}),
-        "links": v.get("links", {}),
-        "co_venturers": v.get("co_venturers", []),
-        "related_ventures": v.get("related_ventures", []),
-        "projects": ventures_projects.list_for(slug, ventures_root=ventures_root)
-                    + ventures_projects.list_for(v["title"], ventures_root=ventures_root),
-        "tasks": ventures_backlog.tasks_for(slug, backlog_dir=backlog_dir),
-    }
+    # Return the whole record (the accessor now passes frontmatter through)
+    # plus the two joins. Enumerating keys here is what silently dropped
+    # `deadlines`; a field should be absent from this payload only because the
+    # venture file does not have it.
+    out = {k: val for k, val in v.items() if not str(k).startswith("_")}
+    projects = ventures_projects.list_for(slug, ventures_root=ventures_root) \
+        + ventures_projects.list_for(v["title"], ventures_root=ventures_root)
+    seen: set[str] = set()
+    deduped = []
+    for p in projects:  # title and slug can both match the same project file
+        if p["slug"] in seen:
+            continue
+        seen.add(p["slug"])
+        deduped.append(p)
+    out["projects"] = deduped
+    out["tasks"] = ventures_backlog.tasks_for(slug, backlog_dir=backlog_dir)
+    return out
 
 
 def project(slug: str, ventures_root: Path | None = None, backlog_dir: Path | None = None) -> dict[str, Any]:

@@ -33,6 +33,11 @@
   .focus-col { background:#181825; border:1px solid #313244; border-radius:6px; padding:10px; }
   .focus-item { cursor:pointer; border-radius:4px; padding:3px 4px; transition:background 0.12s ease; }
   .focus-item:hover { background:#1e1e30; }
+  /* Utilities the purged tailwind.css build omits — the focus-rail layout depends on
+     these, so define them here to keep the portfolio columns from overlapping. */
+  .w-72 { width:18rem; }
+  .flex-none { flex:none; }
+  .ml-1 { margin-left:0.25rem; }
 </style>
 </head>
 <body class="bg-base text-text font-mono">
@@ -504,27 +509,317 @@
       const d = document.getElementById("detail");
       d.className = "flex-1 p-4"; d.classList.remove("hidden"); return d;
     }
+    // ============ MANIFEST-DRIVEN VENTURE DETAIL ============
+    // The bands, their order, and the exact paths each one reads are declared
+    // in web/venture_bands.json and served at api/bands. The same file is what
+    // ventures_contract.py checks against the store in both directions, so a
+    // field cannot be "declared but unrendered" or "rendered but unwritten".
+    // Removing a path from a generic band's `reads` removes it from the page.
+    let bandsManifest = null;
+
+    // Resolve a declared path ("financial.invoices[].id", "co_venturers[].name")
+    // against a record. Returns {scalar} for plain paths or {rows} for [] paths.
+    function resolvePath(obj, path) {
+      const parts = path.split(".");
+      let cur = obj;
+      for (let i = 0; i < parts.length; i++) {
+        let key = parts[i], isArr = key.endsWith("[]");
+        if (isArr) key = key.slice(0, -2);
+        if (cur == null) return undefined;
+        cur = key ? cur[key] : cur;
+        if (isArr) {
+          if (!Array.isArray(cur)) return undefined;
+          const rest = parts.slice(i + 1).join(".");
+          if (!rest) return cur;
+          return cur.map(item => resolvePath(item, rest));
+        }
+      }
+      return cur;
+    }
+    function pathLabel(path) {
+      const last = path.split(".").pop().replace(/\[\]$/, "");
+      return last.replace(/_/g, " ");
+    }
+    function scalarHtml(val) {
+      if (val == null || val === "") return "";
+      if (typeof val === "object") {
+        // Never render "[object Object]". Structured values are shown as their
+        // own nested rows so a nested block is legible instead of dropped.
+        const entries = Array.isArray(val)
+          ? val.map((x, i) => [String(i), x]) : Object.entries(val);
+        if (!entries.length) return `<span class="text-subtext">empty</span>`;
+        return `<span class="text-subtext">{</span>` + entries.map(([k, x]) =>
+          `<span class="ml-1">${esc(k)}: ${typeof x === "object" && x !== null
+            ? `<span class="text-subtext">…${Array.isArray(x)?x.length+" items":Object.keys(x).length+" keys"}</span>`
+            : esc(x)}</span>`).join(`<span class="text-subtext">,</span>`)
+          + `<span class="text-subtext">}</span>`;
+      }
+      const s = String(val);
+      return /^https?:/.test(s)
+        ? `<a class="text-blue" href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`
+        : esc(s);
+    }
+    function kvRows(pairs) {
+      return pairs.map(([k, val]) =>
+        `<div class="text-xs"><span class="text-subtext">${esc(k)}:</span> ${scalarHtml(val)}</div>`
+      ).join("");
+    }
+    // Keys a band claims via `tail: "prefix.*"` but did not name explicitly.
+    function tailPairs(v, band) {
+      if (!band.tail || band.tail === "*") return [];
+      const root = band.tail.slice(0, -2); // "financial.*" -> "financial"
+      const obj = v[root];
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) return [];
+      const named = new Set((band.reads || [])
+        .filter(p => p.startsWith(root + "."))
+        .map(p => p.slice(root.length + 1).split(".")[0].replace(/\[\]$/, "")));
+      return Object.entries(obj).filter(([k]) => !named.has(k));
+    }
+    // Everything no band claimed. Rendered so nothing is dropped; also reported
+    // as `uncategorized` by the contract so it stays visible as drift.
+    function catchAllPairs(v, manifest) {
+      const claimed = new Set(Object.keys(manifest.ignored || {}));
+      claimed.add("slug"); claimed.add("lifecycle"); claimed.add("error");
+      claimed.add("projects"); claimed.add("tasks"); claimed.add("overdue_count");
+      claimed.add("record_fields");  // payload metadata, not a venture field
+      for (const b of manifest.bands) {
+        if (b.tail === "*") continue;
+        for (const p of (b.reads || [])) claimed.add(p.split(".")[0].replace(/\[\]$/, ""));
+        if (b.tail) claimed.add(b.tail.slice(0, -2));
+      }
+      return Object.entries(v).filter(([k]) => !claimed.has(k));
+    }
+
+    const GENERIC = {
+      kv(v, band) {
+        const named = (band.reads || [])
+          .map(p => [pathLabel(p), resolvePath(v, p)])
+          .filter(([, val]) => val !== undefined && val !== null && val !== "");
+        const pairs = named.concat(tailPairs(v, band));
+        return pairs.length ? kvRows(pairs) : null;
+      },
+      table(v, band) {
+        const root = (band.reads || [])[0];
+        if (!root) return null;
+        const arrKey = root.split("[]")[0];
+        const rows = v[arrKey];
+        if (!Array.isArray(rows) || !rows.length) return null;
+        const cols = band.columns
+          || Array.from(new Set((band.reads || []).map(p => p.split("[].")[1]).filter(Boolean)));
+        const head = cols.map(c => `<th class="text-left pr-3 text-subtext font-normal">${esc(c)}</th>`).join("");
+        const body = rows.map(r => {
+          const extra = Object.entries(r).filter(([k]) => !cols.includes(k));
+          const cells = cols.map(c => `<td class="pr-3 align-top">${scalarHtml(r[c])}</td>`).join("");
+          const note = extra.length
+            ? `<tr><td colspan="${cols.length}" class="text-subtext pb-2 pl-2">${kvRows(extra)}</td></tr>` : "";
+          return `<tr>${cells}</tr>${note}`;
+        }).join("");
+        return `<table class="text-xs w-full"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+      },
+      chips(v, band) {
+        // Reads over the same array must produce ONE chip per element, not one
+        // chip per field: `co_venturers[].name` + `co_venturers[].role` is a
+        // person, not seven names followed by seven roles.
+        const groups = new Map();   // array root -> [sub-field, ...]
+        const plain = [];
+        for (const p of (band.reads || [])) {
+          const i = p.indexOf("[].");
+          if (i > -1) {
+            const root = p.slice(0, i), sub = p.slice(i + 3);
+            if (!groups.has(root)) groups.set(root, []);
+            groups.get(root).push(sub);
+          } else {
+            plain.push(p);
+          }
+        }
+        const out = [];
+        for (const [root, subs] of groups) {
+          const arr = v[root];
+          if (!Array.isArray(arr)) continue;
+          for (const item of arr) {
+            if (item == null) continue;
+            if (typeof item !== "object") { out.push(String(item)); continue; }
+            const parts = subs
+              .map(s => resolvePath(item, s))
+              .filter(x => x != null && x !== "" && typeof x !== "object")
+              .map(String);
+            if (parts.length) out.push(parts.join(" — "));
+          }
+        }
+        for (const p of plain) {
+          const val = resolvePath(v, p);
+          if (val == null) continue;
+          for (const item of (Array.isArray(val) ? val : [val])) {
+            if (item == null || item === "") continue;
+            out.push(typeof item === "object"
+              ? Object.values(item).filter(x => x != null && typeof x !== "object").join(" — ")
+              : String(item));
+          }
+        }
+        const uniq = Array.from(new Set(out.filter(Boolean)));
+        return uniq.length ? uniq.map(t => `<span class="badge">${esc(t)}</span>`).join(" ") : null;
+      },
+    };
+
+    // Bands whose rendering is bespoke. Their `reads` are declared but NOT
+    // enforced by rendering; ventures_contract reports them as non-load-bearing
+    // so the honest amount of enforcement is always visible.
+    const CUSTOM_BANDS = {
+      identity(v) {
+        const tags = (v.tags || []).map(t => `<span class="badge">${esc(t)}</span>`).join(" ");
+        return `<h1 class="font-pixel text-mauve text-sm mb-1">${esc(v.title)}</h1>
+          <div class="text-subtext text-xs mb-2">${esc(v.stage)} · ${esc(v.priority)}${
+            v.type ? " · " + esc(v.type) : ""}${
+            v.started_at ? " · started " + esc(String(v.started_at).slice(0,10)) : ""}</div>
+          <p class="text-xs mb-2">${esc(v.description || "")}</p>
+          ${tags ? `<div class="mb-2">${tags}</div>` : ""}
+          ${v.notes ? `<p class="text-xs text-subtext whitespace-pre-wrap mb-2">${esc(v.notes)}</p>` : ""}`;
+      },
+      milestones(v) {
+        const ms = v.milestones || [];
+        if (!ms.length) return null;
+        return ms.map(m => {
+          const done = m.completed || ["done","complete","completed"].includes(String(m.status||"").toLowerCase());
+          const when = m.date || m.completed_at || m.completed_date || (m.deadline && m.deadline.date) || m.date_window || "";
+          const deliv = (m.deliverables || []).map(x => `<li>${scalarHtml(x)}</li>`).join("");
+          return `<div class="mb-2">
+            <div class="text-xs ${done ? "line-through text-subtext" : ""}">
+              <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:v.slug,m:m.id}))}'>${esc(m.title||m.id)}</a>
+              <span class="badge ml-1">${esc(m.status||"")}</span>
+              ${when ? `<span class="text-subtext ml-1">${esc(when)}</span>` : ""}
+              ${m.owner ? `<span class="text-subtext ml-1">· ${esc(m.owner)}</span>` : ""}
+            </div>
+            ${deliv ? `<ul class="text-xs text-subtext ml-4 list-disc">${deliv}</ul>` : ""}
+            ${m.notes ? `<div class="text-xs text-subtext ml-4 whitespace-pre-wrap">${esc(m.notes)}</div>` : ""}
+          </div>`;
+        }).join("");
+      },
+      projects(v) {
+        const ps = v.projects || [];
+        if (!ps.length) return null;
+        return ps.map(p => {
+          const mss = (p.milestones || []).map(m =>
+            `<div class="text-xs ml-4 ${m.done ? "line-through text-subtext" : ""}">
+               ${esc(m.title)}${m.deadline ? `<span class="text-subtext ml-1">${esc(m.deadline)}</span>` : ""}
+               ${m.stage ? `<span class="badge ml-1">${esc(m.stage)}</span>` : ""}</div>`).join("");
+          return `<div class="mb-2">
+            <div class="text-xs">
+              <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:v.slug,p:p.slug}))}'>${esc(p.name||p.slug)}</a>
+              ${p.stage ? `<span class="badge ml-1">${esc(p.stage)}</span>` : ""}
+              ${p.priority ? `<span class="badge">${esc(p.priority)}</span>` : ""}
+              ${p.owner ? `<span class="text-subtext ml-1">${esc(p.owner)}</span>` : ""}
+            </div>
+            ${p.objective ? `<div class="text-xs text-subtext ml-4">${esc(p.objective)}</div>` : ""}
+            ${mss}</div>`;
+        }).join("");
+      },
+      tasks(v) {
+        const ts = v.tasks || [];
+        if (!ts.length) return null;
+        const open = ts.filter(t => !["done","complete","completed","closed","cancelled"]
+          .includes(String(t.status||"").toLowerCase()));
+        const closed = ts.filter(t => !open.includes(t));
+        return taskList(open) + (closed.length
+          ? `<details class="mt-2"><summary class="text-subtext text-xs cursor-pointer">${closed.length} closed</summary>
+             <div class="mt-1">${taskList(closed)}</div></details>` : "");
+      },
+      financial(v, band) {
+        const f = v.financial;
+        if (!f || !Object.keys(f).length) return null;
+        const money = m => (m && typeof m === "object" && m.amount != null)
+          ? `${esc(m.amount)} ${esc(m.currency || "")}` : scalarHtml(m);
+        const totals = [
+          ["invoiced", f.total_invoiced], ["received", f.total_received],
+          ["outstanding", f.outstanding],
+          ["bank confirmed", f.received_bank_confirmed],
+          ["client asserted (unverified)", f.received_client_asserted_unverified],
+        ].filter(([, m]) => m != null);
+        const totalsHtml = totals.length ? `<div class="mb-2">` + totals.map(([k, m]) =>
+          `<div class="text-xs"><span class="text-subtext">${esc(k)}:</span> ${money(m)}</div>`).join("") + `</div>` : "";
+        const invs = f.invoices || [];
+        const invHtml = invs.length ? `<table class="text-xs w-full mb-2"><thead><tr>
+            ${["id","amount","issued","due","status"].map(c=>`<th class="text-left pr-3 text-subtext font-normal">${esc(c)}</th>`).join("")}
+          </tr></thead><tbody>` + invs.map(i => `<tr>
+            <td class="pr-3">${i.pdf ? `<span title="${esc(i.pdf)}">${esc(i.id)}</span>` : esc(i.id)}</td>
+            <td class="pr-3">${esc(i.amount)} ${esc(i.currency||"")}</td>
+            <td class="pr-3 text-subtext">${esc(i.issued ? String(i.issued).slice(0,10) : "")}</td>
+            <td class="pr-3 text-subtext">${esc(i.due ? String(i.due).slice(0,10) : "")}</td>
+            <td class="pr-3"><span class="badge">${esc(i.status||"")}</span></td>
+          </tr>${i.description ? `<tr><td colspan="5" class="text-subtext pb-1">${esc(i.description)}</td></tr>` : ""}`).join("")
+          + `</tbody></table>` : "";
+        // Anything the totals block or the invoice table already showed must
+        // not be repeated by the tail.
+        const shown = new Set(["invoices", "total_invoiced", "total_received",
+          "outstanding", "received_bank_confirmed", "received_client_asserted_unverified"]);
+        const rest = tailPairs(v, band).filter(([k]) => !shown.has(k));
+        return totalsHtml + invHtml + (rest.length ? kvRows(rest) : "");
+      },
+    };
+
+    function emptyState(band, v) {
+      // Typed, never a bare "none": a wrong join and a genuinely empty venture
+      // must not look the same. That confusion is what hid `Projects: none`
+      // while six projects existed.
+      //
+      // `record_fields` is what the FILE had, not what the payload defaulted.
+      // Testing v[key] !== undefined would call every venture's `deadlines`
+      // "present but empty", because the accessor defaults it to [].
+      const JOIN_BANDS = {
+        projects: "no project files found under this venture's projects/ tree, and none in project-mirror/",
+        tasks: "no backlog tasks link to this venture, by venture: field or parent_id",
+      };
+      if (JOIN_BANDS[band.key]) {
+        return `<p class="text-subtext text-xs">${JOIN_BANDS[band.key]}</p>`;
+      }
+      const root = (band.reads || [])[0];
+      const key = band.tail && band.tail !== "*" ? band.tail.slice(0, -2)
+                : root ? root.split(".")[0].replace(/\[\]$/, "") : band.key;
+      const inRecord = (v.record_fields || []).includes(key);
+      const msg = inRecord
+        ? `<code>${esc(key)}</code> is in this record but empty`
+        : `no <code>${esc(key)}</code> in this venture's record`;
+      return `<p class="text-subtext text-xs">${msg}</p>`;
+    }
+
+    function renderBand(v, band, manifest) {
+      // Per-band isolation: one band throwing must not take the page down.
+      // Before this, any error anywhere 500'd the whole detail request.
+      let html;
+      try {
+        if (band.tail === "*") {
+          const pairs = catchAllPairs(v, manifest);
+          html = pairs.length ? kvRows(pairs) : null;
+        } else if (band.renderer === "custom") {
+          html = (CUSTOM_BANDS[band.key] || (() => null))(v, band);
+        } else {
+          switch (band.renderer) {
+            case "kv":    html = GENERIC.kv(v, band); break;
+            case "table": html = GENERIC.table(v, band); break;
+            case "chips": html = GENERIC.chips(v, band); break;
+            default:      html = null;
+          }
+        }
+      } catch (e) {
+        return `<h2 class="font-pixel text-xs text-red mt-4 mb-2">${esc(band.title || band.key)}</h2>
+                <p class="text-xs text-red">this band failed to render: ${esc(e.message || e)}</p>`;
+      }
+      const heading = band.title
+        ? `<h2 class="font-pixel text-xs text-green mt-4 mb-2">${esc(band.title)}</h2>` : "";
+      return heading + (html || emptyState(band, v));
+    }
+
     async function renderVenture(slug) {
-      const v = await api("api/venture/" + encodeURIComponent(slug));
+      const [v, manifest] = await Promise.all([
+        api("api/venture/" + encodeURIComponent(slug)),
+        bandsManifest ? Promise.resolve(bandsManifest) : api("api/bands").then(m => (bandsManifest = m)),
+      ]);
       const d = enterDetail();
-      if (v.error) { d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Venture not found.</p>`; wireGo(d); return; }
-      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}]) + `
-        <h1 class="font-pixel text-mauve text-sm mb-1">${esc(v.title)}</h1>
-        <div class="text-subtext text-xs mb-3">${esc(v.stage)} · ${esc(v.priority)}</div>
-        <p class="text-xs mb-4">${esc(v.description||"")}</p>
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones</h2>
-        ${(v.milestones||[]).map(m=>`<div class="text-xs mb-1 ${m.completed?'line-through text-subtext':''}">
-            <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,m:m.id}))}'>${esc(m.title||m.id)}</a>
-            <span class="badge ml-2">${esc(m.status||"")}</span></div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(v.tasks)}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Links &amp; Repos</h2>
-        ${Object.entries(v.links||{}).map(([k,val])=>`<div class="text-xs"><span class="text-subtext">${esc(k)}:</span> ${/^https?:/.test(String(val))?`<a class="text-blue" href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a>`:esc(val)}</div>`).join("") || `<p class="text-subtext text-xs">none</p>`}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Financial</h2>
-        ${v.financial&&Object.keys(v.financial).length?`<div class="text-xs">revenue to date: ${esc(v.financial.revenue_to_date??"—")} ${esc(v.financial.currency||"")}</div>`:`<p class="text-subtext text-xs">none</p>`}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Team</h2>
-        ${(v.co_venturers||[]).map(c=>`<span class="badge">${esc(c.name)} — ${esc(c.role||"")}</span>`).join(" ")||`<p class="text-subtext text-xs">none</p>`}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Projects</h2>
-        ${(v.projects||[]).map(p=>`<div class="text-xs"><a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:slug,p:p.slug}))}'>${esc(p.slug)}</a> — ${esc(p.objective||"")}</div>`).join("")||`<p class="text-subtext text-xs">none</p>`}`;
+      if (v.error) {
+        d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Venture not found.</p>`;
+        wireGo(d); return;
+      }
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}])
+        + manifest.bands.map(b => renderBand(v, b, manifest)).join("");
       wireGo(d);
     }
     async function renderProject(slug) {

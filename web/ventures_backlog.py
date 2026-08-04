@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 import yaml
 
+import ventures_cache
+
 _BACKLOG_DEFAULT = Path.home() / ".claude" / "local" / "backlog"
 _PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _ID_RE = re.compile(r"(?:task-)?(\d+)")
@@ -35,7 +37,7 @@ def _frontmatter(text: str) -> dict[str, Any]:
 
 
 def _signature(d: Path) -> tuple:
-    return tuple(sorted((p.name, p.stat().st_mtime_ns) for p in d.glob("*.md")))
+    return ventures_cache.mtime_signature(d.glob("*.md"))
 
 
 def _all_tasks(d: Path) -> list[dict[str, Any]]:
@@ -62,12 +64,9 @@ def _all_tasks(d: Path) -> list[dict[str, Any]]:
 
 
 def _cached_tasks(d: Path) -> list[dict[str, Any]]:
-    key = str(d.resolve())
-    sig = _signature(d)
-    entry = _CACHE.get(key)
-    if entry is None or entry["sig"] != sig:
-        _CACHE[key] = {"sig": sig, "tasks": _all_tasks(d)}
-    return _CACHE[key]["tasks"]
+    return ventures_cache.cached(
+        _CACHE, str(d.resolve()), _signature(d), lambda: _all_tasks(d)
+    )
 
 
 def _matches(t: dict, venture: str, project: str | None, milestone: str | None) -> bool:

@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+import ventures_cache
 from claude_webui.healthz import healthz_response
 
 NAMESPACE = "legion.claude-venture"
@@ -35,6 +36,28 @@ _LIFECYCLES = ("seed", "exploring", "active", "sustaining", "dormant", "harvesti
 # holds the full parsed dicts (including _-prefixed keys); list()/detail()/
 # stats() read from it and strip internal keys at the boundary.
 _CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+
+
+def _jsonify(value: Any) -> Any:
+    """Coerce YAML scalars that JSON cannot encode into strings, recursively.
+
+    PyYAML turns an unquoted `2026-03-16` into a `datetime.date` and
+    `2026-03-16T00:00:00Z` into a `datetime.datetime`. Both are invisible until
+    something tries to serialise them, at which point the endpoint 500s. Since
+    the record is now passed through wholesale, one unquoted date anywhere in
+    any venture file would take that venture's detail page down. Normalising
+    here means every consumer -- payload, focus, timeline -- sees ISO strings,
+    which is what the date-parsing code already expects.
+    """
+    if isinstance(value, dict):
+        return {k: _jsonify(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_jsonify(v) for v in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
 
 
 def _split_frontmatter(text: str) -> dict[str, Any]:
@@ -65,23 +88,26 @@ class VenturesAccessor:
     def _signature(self) -> tuple:
         """mtime-signature over all venture files. Reused by the parse cache
         and aligned with the public signature() the kernel polls."""
-        return tuple((str(md), md.stat().st_mtime_ns) for _lc, md in self._iter_files())
+        return ventures_cache.mtime_signature(md for _lc, md in self._iter_files())
 
     def _records(self) -> list[dict[str, Any]]:
         """Parse every venture file ONCE into full parsed dicts and cache the
         result, keyed by (resolved data_root, today). Invalidated when the
         mtime-signature changes. Callers must not mutate the returned dicts."""
-        key = (str(self.data_root.resolve()), self._today.isoformat())
-        sig = self._signature()
-        entry = _CACHE.get(key)
-        if entry is None or entry["sig"] != sig:
+        def _build() -> list[dict[str, Any]]:
             recs: list[dict[str, Any]] = []
             for lifecycle, md in self._iter_files():
                 v = self._parse(lifecycle, md)
                 if v is not None:
                     recs.append(v)
-            _CACHE[key] = {"sig": sig, "records": recs}
-        return _CACHE[key]["records"]
+            return recs
+
+        return ventures_cache.cached(
+            _CACHE,
+            (str(self.data_root.resolve()), self._today.isoformat()),
+            self._signature(),
+            _build,
+        )
 
     def _parse(self, lifecycle: str, md: Path) -> dict[str, Any] | None:
         try:
@@ -107,7 +133,25 @@ class VenturesAccessor:
             [] if lifecycle == "harvesting"
             else [d for d in deadlines if self._is_overdue(d)]
         )
-        return {
+        # Carry the WHOLE frontmatter through, then let the normalized keys
+        # below override. Previously this returned a fixed 13-key dict, so
+        # `legal`, `data`, `meetings`, `notes`, `tags` and `type` never left
+        # the accessor at all -- a field could not be rendered because it was
+        # discarded three layers before the renderer. Passing everything and
+        # overriding what we normalize means adding a field to a venture file
+        # never again requires editing this function.
+        passthrough = {k: v for k, v in fm.items() if not str(k).startswith("_")}
+        # _jsonify the WHOLE record, not just the passthrough: the normalized
+        # keys below are re-read from `fm` and would otherwise smuggle raw
+        # date objects straight past the coercion.
+        return _jsonify({
+            **passthrough,
+            # Which keys the FILE actually had. The normalized keys below
+            # default `deadlines` to [] and `financial` to {}, so a consumer
+            # cannot otherwise tell "the author wrote an empty list" from "the
+            # author never wrote this field". The detail page needs that
+            # distinction to state truthfully why a section is empty.
+            "record_fields": sorted(str(k) for k in passthrough),
             "slug": slug,
             "title": fm.get("title", slug),
             "description": fm.get("description", ""),
@@ -122,7 +166,7 @@ class VenturesAccessor:
             "financial": fm.get("financial") or {},
             "links": fm.get("links") or {},
             "related_ventures": fm.get("related_ventures") or [],
-        }
+        })
 
     def _is_overdue(self, deadline: dict[str, Any]) -> bool:
         status = str(deadline.get("status", "")).strip().lower()
