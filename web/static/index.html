@@ -465,21 +465,26 @@
           <div class="flex items-start gap-2">
             <span class="text-sm leading-none">${id.emoji || ""}</span>
             <div class="flex-1 min-w-0">
-              <div class="font-pixel text-xs truncate" data-open="${esc(i.slug)}" title="open ${esc(i.title)}"
-                   style="color:${col}">${esc(i.title)}</div>
+              <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
               <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
             </div>
-            <span class="open-btn text-xs text-subtext" data-open="${esc(i.slug)}" title="open full">↗</span>
+            <span class="hl-btn text-xs" data-hl="${esc(i.slug)}"
+                  title="${state.highlights.has(i.slug) ? "remove highlight" : "highlight (filter only, does not open)"}"
+                  style="cursor:pointer;color:${state.highlights.has(i.slug) ? col : "#45475a"}">★</span>
           </div>
           ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
         </div>`; }).join("");
       const grid = document.getElementById("grid");
+      // Clicking a card OPENS that venture. That is the obvious meaning of
+      // clicking a card and it is what the whole grid is for. The highlight
+      // filter lives on its own always-visible ★, so it stays available
+      // without hijacking the primary action or hiding behind a hover state.
       grid.querySelectorAll(".ui-card").forEach(el => el.onclick = (e) => {
-        if (e.target.closest("[data-open]")) return;     // click = toggle highlight (filter), not navigate
-        toggleHighlight(el.dataset.slug);
+        if (e.target.closest("[data-hl]")) return;
+        go({ v: el.dataset.slug });
       });
-      grid.querySelectorAll("[data-open]").forEach(el => el.onclick = (e) => {
-        e.stopPropagation(); go({ v: el.dataset.open });  // ↗ opens the full venture page
+      grid.querySelectorAll("[data-hl]").forEach(el => el.onclick = (e) => {
+        e.stopPropagation(); toggleHighlight(el.dataset.hl);
       });
     }
     function backBar(crumbs) {
