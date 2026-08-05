@@ -22,6 +22,20 @@
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
   .ui-card.hl  { box-shadow:0 0 0 2px var(--hl,#cba6f7); }
+  /* Working-set star. Sized as a real 28px hit target rather than a glyph:
+     it is a control, and it was previously too small and too dim to find.
+     Hollow ☆ when unmarked, filled ★ when marked, so state reads at a glance
+     instead of depending on a colour difference. */
+  .star-btn { display:inline-flex; align-items:center; justify-content:center;
+              width:28px; height:28px; margin:-5px -5px 0 0; flex:none;
+              border-radius:7px; font-size:1.15rem; line-height:1;
+              cursor:pointer; user-select:none; color:#6c7086;
+              border:1px solid transparent;
+              transition:color .12s, background .12s, border-color .12s, transform .12s; }
+  .star-btn:hover { color:var(--sc,#cba6f7); background:#313244;
+                    border-color:#45475a; transform:scale(1.12); }
+  .star-btn.on { color:var(--sc,#cba6f7); }
+  .star-btn.on:hover { background:#313244; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -502,9 +516,9 @@
               <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
               <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
             </div>
-            <span class="hl-btn text-xs" data-hl="${esc(i.slug)}"
+            <span class="star-btn ${state.highlights.has(i.slug) ? "on" : ""}" data-hl="${esc(i.slug)}"
                   title="${state.highlights.has(i.slug) ? "remove from working set" : "add to working set"}"
-                  style="cursor:pointer;color:${state.highlights.has(i.slug) ? col : "#45475a"}">★</span>
+                  style="--sc:${col}">${state.highlights.has(i.slug) ? "★" : "☆"}</span>
           </div>
           ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
         </div>`; }).join("");
