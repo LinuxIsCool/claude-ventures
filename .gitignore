@@ -5,3 +5,7 @@ bun.lock
 .DS_Store
 .letta/
 __pycache__/
+
+# Brainstorm scratch — session artifacts, not source. Was auto-synced in and
+# carried client names into a repo that was public until 2026-08-05.
+.superpowers/
