@@ -505,7 +505,11 @@
     }
     function enterDetail() {
       document.getElementById("page").classList.add("hidden");
-      document.getElementById("page-nav").classList.add("hidden");
+      // Keep the left nav mounted. Hiding it meant drilling into any venture
+      // stranded you with no way to reach Timeline / Priorities / Trends
+      // except the browser back button.
+      document.getElementById("page-nav").classList.remove("hidden");
+      renderNav();
       const d = document.getElementById("detail");
       d.className = "flex-1 p-4"; d.classList.remove("hidden"); return d;
     }
@@ -756,7 +760,13 @@
       },
     };
 
-    function emptyState(band, v) {
+    function emptyState(band, v, staleBackend) {
+      // A stale backend cannot tell us what the file had, so refuse to make a
+      // claim about the record. Saying nothing true is better than saying
+      // something false.
+      if (staleBackend) {
+        return `<p class="text-subtext text-xs">not sent by this server (older backend)</p>`;
+      }
       // Typed, never a bare "none": a wrong join and a genuinely empty venture
       // must not look the same. That confusion is what hid `Projects: none`
       // while six projects existed.
@@ -781,7 +791,7 @@
       return `<p class="text-subtext text-xs">${msg}</p>`;
     }
 
-    function renderBand(v, band, manifest) {
+    function renderBand(v, band, manifest, staleBackend) {
       // Per-band isolation: one band throwing must not take the page down.
       // Before this, any error anywhere 500'd the whole detail request.
       let html;
@@ -805,21 +815,56 @@
       }
       const heading = band.title
         ? `<h2 class="font-pixel text-xs text-green mt-4 mb-2">${esc(band.title)}</h2>` : "";
-      return heading + (html || emptyState(band, v));
+      return heading + (html || emptyState(band, v, staleBackend));
+    }
+
+    // The manifest is a STATIC file, not an API route. Both it and this page
+    // are read from disk per request, so they can never disagree about which
+    // version they are. Fetching it from /api/ made the page depend on the
+    // backend's process age, and a server started before the endpoint existed
+    // served this frontend a 404 and rendered a blank page.
+    async function loadManifest() {
+      if (bandsManifest) return bandsManifest;
+      const r = await fetch("static/venture_bands.json");
+      if (!r.ok) throw new Error("static/venture_bands.json " + r.status);
+      return (bandsManifest = await r.json());
     }
 
     async function renderVenture(slug) {
-      const [v, manifest] = await Promise.all([
-        api("api/venture/" + encodeURIComponent(slug)),
-        bandsManifest ? Promise.resolve(bandsManifest) : api("api/bands").then(m => (bandsManifest = m)),
-      ]);
-      const d = enterDetail();
+      const d = enterDetail();   // enter the view FIRST: a failure below must
+                                 // still leave the user somewhere navigable
+      let v, manifest;
+      try {
+        [v, manifest] = await Promise.all([
+          api("api/venture/" + encodeURIComponent(slug)),
+          loadManifest(),
+        ]);
+      } catch (e) {
+        d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) +
+          `<p class="text-xs text-red">This page could not load: ${esc(e.message||e)}</p>
+           <p class="text-xs text-subtext mt-2">If this names a missing endpoint or file,
+           the server is running older code than the page. Restart the webui.</p>`;
+        wireGo(d); return;
+      }
       if (v.error) {
         d.innerHTML = backBar([{label:"← Portfolio",href:{}}]) + `<p class="text-xs">Venture not found.</p>`;
         wireGo(d); return;
       }
-      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}])
-        + manifest.bands.map(b => renderBand(v, b, manifest)).join("");
+      // `record_fields` is sent by every backend that can also send the full
+      // record. Its absence means the server predates that change, so sections
+      // will render empty for fields the venture actually HAS. Without this
+      // banner the page would state "no deadlines in this venture's record"
+      // about a record holding eight -- the precise confusion between "absent"
+      // and "not delivered" that this page was rebuilt to eliminate.
+      const staleBackend = v.record_fields === undefined;
+      const staleBanner = staleBackend
+        ? `<div class="text-xs text-yellow" style="border:1px solid #f9e2af55;border-radius:4px;padding:6px 8px;margin-bottom:10px">
+             This server is running older code than this page, so it is not sending the full
+             venture record. Sections below may read as empty for fields this venture does have.
+             Restart the webui to see the real values.
+           </div>` : "";
+      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}]) + staleBanner
+        + manifest.bands.map(b => renderBand(v, b, manifest, staleBackend)).join("");
       wireGo(d);
     }
     async function renderProject(slug) {

@@ -33,7 +33,13 @@ from typing import Any, Iterable
 import yaml
 
 HERE = Path(__file__).resolve().parent
-MANIFEST_PATH = HERE / "venture_bands.json"
+# The manifest lives under static/ so the kernel serves it from disk on every
+# request, exactly like index.html. That is deliberate: when it was behind an
+# /api/ route, a running server with old Python and new static files served a
+# frontend that fetched an endpoint its own backend did not have, and the
+# detail page rendered nothing at all. The page and its manifest now move
+# together as files, so no backend restart is needed to keep them in step.
+MANIFEST_PATH = HERE / "static" / "venture_bands.json"
 
 _LIFECYCLES = ("seed", "exploring", "active", "sustaining", "dormant", "harvesting")
 _MAX_DEPTH = 3
