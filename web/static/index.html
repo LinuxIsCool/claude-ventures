@@ -21,10 +21,7 @@
   .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
-  .ui-card.dim { opacity:.34; filter:grayscale(.55); }
   .ui-card.hl  { box-shadow:0 0 0 2px var(--hl,#cba6f7); }
-  .ui-card .open-btn { opacity:0; transition:opacity .12s; cursor:pointer; }
-  .ui-card:hover .open-btn { opacity:.85; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -64,7 +61,7 @@
 
   <script src="static/embedded-bar.js"></script>
   <script>
-    const state = { lifecycle: "all", q: "", view: "portfolio", highlights: new Set(), identity: {}, ventures: [] };
+    const state = { lifecycle: "all", q: "", view: "portfolio", highlights: new Set(), focusOnly: false, identity: {}, ventures: [] };
     const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
     const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
@@ -116,15 +113,31 @@
       return { active:"text-green", exploring:"text-blue",
                dormant:"text-subtext", harvesting:"text-yellow" }[lc] || "text-text";
     }
-    // ---- identity (emoji + colour) + persistent multi-select highlight filter ----
+    // ---- identity (emoji + colour) + the working set ----
+    //
+    // Two separate things, deliberately. MARKING a venture (★) is local and
+    // cheap: it joins your working set and that card gets a ring. FILTERING to
+    // the working set is a distinct, explicit toggle that lives in the chip row
+    // with every other filter.
+    //
+    // They used to be one variable, so a single click both marked a venture and
+    // silently narrowed the grid AND the focus rail. That was tolerable when the
+    // gesture was a whole-card click, and became disproportionate once the card
+    // click was given back to "open". Effects should be the size of the gesture
+    // that caused them.
+    //
+    // The set persists (it is something you curate); the filter does not (it is
+    // a view you switch on).
     const HL_KEY = "ventures.highlights";
     function loadHL() { try { return new Set(JSON.parse(localStorage.getItem(HL_KEY) || "[]")); } catch (e) { return new Set(); } }
     function saveHL() { localStorage.setItem(HL_KEY, JSON.stringify([...state.highlights])); }
     async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
     function ident(slug) { return state.identity[slug] || {}; }
-    function toggleHighlight(slug) {
+    function redrawWorkingSet() { renderGrid(); renderFocusRail(); renderStats(); }
+    function toggleHighlight(slug) {   // mark / unmark. Local effect only.
       state.highlights.has(slug) ? state.highlights.delete(slug) : state.highlights.add(slug);
-      saveHL(); renderGrid(); renderFocusRail(); renderStats();
+      if (!state.highlights.size) state.focusOnly = false;  // nothing left to focus on
+      saveHL(); redrawWorkingSet();
     }
     async function renderStats() {
       const s = await api("api/stats");
@@ -137,11 +150,24 @@
       chips.querySelectorAll("[data-lc]").forEach(el =>
         el.onclick = () => { state.lifecycle = el.dataset.lc; renderStats(); renderGrid(); });
       if (state.highlights.size) {
+        // The filter toggle, in the chip row alongside every other filter.
         const c = document.createElement("span");
-        c.className = "chip active"; c.style.borderColor = "#cba6f7"; c.style.color = "#cba6f7";
-        c.textContent = `★ ${state.highlights.size} highlighted ✕`;
-        c.onclick = () => { state.highlights.clear(); saveHL(); renderGrid(); renderFocusRail(); renderStats(); };
+        c.className = "chip" + (state.focusOnly ? " active" : "");
+        if (state.focusOnly) { c.style.borderColor = "#cba6f7"; c.style.color = "#cba6f7"; }
+        c.textContent = `★ working set (${state.highlights.size})`;
+        c.title = state.focusOnly
+          ? "showing only your working set — click to show all ventures"
+          : "click to show only your working set, here and in the focus rail";
+        c.onclick = () => { state.focusOnly = !state.focusOnly; redrawWorkingSet(); };
         chips.appendChild(c);
+
+        const clr = document.createElement("span");
+        clr.className = "chip"; clr.textContent = "clear ✕";
+        clr.title = "unmark every venture";
+        clr.onclick = () => {
+          state.highlights.clear(); state.focusOnly = false; saveHL(); redrawWorkingSet();
+        };
+        chips.appendChild(clr);
       }
     }
     async function renderFocusRail() {
@@ -155,9 +181,13 @@
         { key:"soon", label:"Soon" },
         { key:"attention", label:"Needs attention" },
       ];
+      // The rail narrows only when the working-set filter is explicitly ON.
+      // Previously it narrowed the moment anything was marked, which made a
+      // small star quietly change a panel elsewhere on the page.
       const hl = state.highlights;
       const hlTitles = new Set(state.ventures.filter(v => hl.has(v.slug)).map(v => v.title));
-      const keep = it => !hl.size || hl.has(it.venture) || hlTitles.has(it.venture) || hl.has((it.ref || {}).v);
+      const keep = it => !state.focusOnly || !hl.size
+        || hl.has(it.venture) || hlTitles.has(it.venture) || hl.has((it.ref || {}).v);
       const colHtml = c => {
         const items = (f[c.key] || []).filter(keep);
         const body = items.length ? items.map((it, i) => `
@@ -456,10 +486,14 @@
       state.ventures = items;
       if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
       if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
-      const anyHL = state.highlights.size > 0;
+      // Filter, don't dim. Dimming was a way of faking a filter; now that the
+      // chip filters properly, cards outside the working set are simply absent.
+      if (state.focusOnly && state.highlights.size) {
+        items = items.filter(i => state.highlights.has(i.slug));
+      }
       document.getElementById("grid").innerHTML = items.map(i => {
         const id = ident(i.slug), col = id.colour || "#9399b2";
-        const cls = state.highlights.has(i.slug) ? "hl" : (anyHL ? "dim" : "");
+        const cls = state.highlights.has(i.slug) ? "hl" : "";
         return `
         <div class="ui-card cursor-pointer ${cls}" data-slug="${esc(i.slug)}" style="border-left:4px solid ${col};--hl:${col}">
           <div class="flex items-start gap-2">
@@ -469,7 +503,7 @@
               <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
             </div>
             <span class="hl-btn text-xs" data-hl="${esc(i.slug)}"
-                  title="${state.highlights.has(i.slug) ? "remove highlight" : "highlight (filter only, does not open)"}"
+                  title="${state.highlights.has(i.slug) ? "remove from working set" : "add to working set"}"
                   style="cursor:pointer;color:${state.highlights.has(i.slug) ? col : "#45475a"}">★</span>
           </div>
           ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
