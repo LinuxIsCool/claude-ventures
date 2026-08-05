@@ -58,7 +58,46 @@ def _frontmatter(text: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _parse_structured(md: Path, fm: dict[str, Any]) -> dict[str, Any]:
+def _body(text: str) -> str:
+    """The first prose paragraph after the frontmatter, whitespace collapsed.
+
+    Structured project files carry their description as body prose, not as a
+    frontmatter field: not one of the 18 real projects in the store sets
+    `target` or `notes`. Without this, `objective` fell back to `name` and every
+    project on every venture detail page printed its own title twice.
+    """
+    parts = text.split("---", 2)
+    body = parts[2] if len(parts) >= 3 else text
+    for para in body.strip().split("\n\n"):
+        collapsed = " ".join(para.split())
+        if collapsed:
+            return collapsed
+    return ""
+
+
+def _practices(fm: dict[str, Any]) -> list[dict[str, str]]:
+    """`practices:` on a project, the third tier of the hierarchy.
+
+    A practice is work that never completes: occurrences close, and a lapse in
+    cadence is the alarm. claude-addr writes this key and resolves addresses
+    like CIRCUS-CALISTHENICS.training.handstands from it; surfacing it here is
+    what stops the resolver and this page from disagreeing about what exists.
+    Entries may be a bare slug or a {slug, name} mapping.
+    """
+    out: list[dict[str, str]] = []
+    for prac in fm.get("practices") or []:
+        if isinstance(prac, str):
+            prac = {"slug": prac}
+        if not isinstance(prac, dict):
+            continue
+        slug = str(prac.get("slug") or "").strip()
+        if not slug:
+            continue
+        out.append({"slug": slug, "name": str(prac.get("name") or slug)})
+    return out
+
+
+def _parse_structured(md: Path, fm: dict[str, Any], text: str = "") -> dict[str, Any]:
     """Format 1: <venture>/projects/<slug>/project.md with a milestones/ dir."""
     milestones: list[dict[str, Any]] = []
     ms_dir = md.parent / "milestones"
@@ -80,11 +119,17 @@ def _parse_structured(md: Path, fm: dict[str, Any]) -> dict[str, Any]:
         "slug": str(fm.get("slug") or md.parent.name),
         "venture": str(fm.get("venture") or ""),
         "name": fm.get("name"),
-        "objective": str(fm.get("target") or fm.get("notes") or fm.get("name") or ""),
+        # `name` stays the last resort so a project with no prose still renders
+        # something, but body prose comes first because that is where every
+        # real project in the store actually keeps its description.
+        "objective": str(
+            fm.get("target") or fm.get("notes") or _body(text) or fm.get("name") or ""
+        ),
         "stage": fm.get("stage"),
         "priority": fm.get("priority"),
         "owner": fm.get("owner"),
         "milestones": milestones,
+        "practices": _practices(fm),
         "format": "structured",
         "source": str(md),
     }
@@ -94,7 +139,7 @@ def _parse(md: Path) -> dict[str, Any]:
     text = md.read_text(encoding="utf-8")
     fm = _frontmatter(text)
     if fm is not None:
-        return _parse_structured(md, fm)
+        return _parse_structured(md, fm, text)
     vm = _VENTURE_RE.search(text)
     om = _OBJECTIVE_RE.search(text)
     milestones = []
@@ -110,6 +155,10 @@ def _parse(md: Path) -> dict[str, Any]:
         "venture": vm.group(1).strip() if vm else "",
         "objective": om.group(1).strip() if om else "",
         "milestones": milestones,
+        # The prose format has no practices concept. Present and empty rather
+        # than absent, so a consumer never has to know which parser produced
+        # the row -- the two formats already differ enough.
+        "practices": [],
         "body": text,
         "format": "prose",
         "source": str(md),
@@ -184,6 +233,8 @@ def list_for(venture_title_or_slug: str, ventures_root: Path | None = None) -> l
             "owner": p.get("owner"),
             "milestone_count": len(p.get("milestones") or []),
             "milestones": p.get("milestones") or [],
+            "practice_count": len(p.get("practices") or []),
+            "practices": p.get("practices") or [],
             "format": p.get("format"),
         })
     return out
