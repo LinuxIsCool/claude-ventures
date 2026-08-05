@@ -465,7 +465,8 @@
           <div class="flex items-start gap-2">
             <span class="text-sm leading-none">${id.emoji || ""}</span>
             <div class="flex-1 min-w-0">
-              <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
+              <div class="font-pixel text-xs truncate" data-open="${esc(i.slug)}" title="open ${esc(i.title)}"
+                   style="color:${col}">${esc(i.title)}</div>
               <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
             </div>
             <span class="open-btn text-xs text-subtext" data-open="${esc(i.slug)}" title="open full">↗</span>
