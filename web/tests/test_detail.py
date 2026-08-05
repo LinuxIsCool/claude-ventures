@@ -133,6 +133,91 @@ def test_structured_project_tree_is_discovered(tmp_path: Path):
     assert lst[0]["milestones"][0]["deadline"] == "2026-09-01"
 
 
+def test_objective_comes_from_body_prose_not_the_name(tmp_path: Path):
+    """Every project on every venture page printed its own title twice.
+
+    `objective` fell back to `name`, and not one of the 18 real projects in
+    the store sets `target` or `notes` -- they all keep their description as
+    body prose. So the detail page rendered the name, then the name again.
+    """
+    vroot = tmp_path / "ventures"
+    pdir = vroot / "acme" / "projects" / "build-it"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: build-it\nname: Build It\nventure: acme\nstage: active\n---\n"
+        "Separate workstream. PI: Octopus.\n\nA second paragraph is not the summary.\n",
+        encoding="utf-8")
+
+    lst = ventures_projects.list_for("acme", ventures_root=vroot)
+    assert lst[0]["objective"] == "Separate workstream. PI: Octopus."
+    assert lst[0]["objective"] != lst[0]["name"], "objective must not echo the name"
+
+
+def test_objective_falls_back_to_name_when_there_is_no_prose(tmp_path: Path):
+    """The fallback chain must not regress to empty: a project with no prose
+    and no target/notes still has to render something."""
+    vroot = tmp_path / "ventures"
+    pdir = vroot / "acme" / "projects" / "bare"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: bare\nname: Bare Project\nventure: acme\n---\n", encoding="utf-8")
+
+    lst = ventures_projects.list_for("acme", ventures_root=vroot)
+    assert lst[0]["objective"] == "Bare Project"
+
+
+def test_target_and_notes_still_outrank_body_prose(tmp_path: Path):
+    """Explicit frontmatter beats prose. A project that bothered to state its
+    target must not have it silently replaced by whatever the body opens with."""
+    vroot = tmp_path / "ventures"
+    pdir = vroot / "acme" / "projects" / "stated"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: stated\nname: Stated\nventure: acme\ntarget: Ship by Q4\n---\n"
+        "Body prose that must not win.\n", encoding="utf-8")
+
+    lst = ventures_projects.list_for("acme", ventures_root=vroot)
+    assert lst[0]["objective"] == "Ship by Q4"
+
+
+def test_practices_are_surfaced_as_the_third_tier(tmp_path: Path):
+    """Ventures > Projects > Practices.
+
+    claude-addr writes `practices:` on a project and resolves addresses like
+    CIRCUS-CALISTHENICS.training.handstands from it. If this page cannot see
+    the key, the resolver and the webui disagree about what exists, which is
+    the exact split that made an inline `projects:` format invisible here.
+    """
+    vroot = tmp_path / "ventures"
+    pdir = vroot / "circus-calisthenics" / "projects" / "training"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: training\nname: Training progression\n"
+        "venture: circus-calisthenics\nstage: active\n"
+        "practices:\n  - slug: handstands\n    name: Handstands\n  - bare-slug\n---\n"
+        "Daily practice.\n", encoding="utf-8")
+
+    lst = ventures_projects.list_for("circus-calisthenics", ventures_root=vroot)
+    assert lst[0]["practice_count"] == 2
+    assert lst[0]["practices"][0] == {"slug": "handstands", "name": "Handstands"}
+    # A bare string entry is a slug with no separate name.
+    assert lst[0]["practices"][1] == {"slug": "bare-slug", "name": "bare-slug"}
+
+
+def test_a_project_without_practices_reports_an_empty_list(tmp_path: Path):
+    """Present and empty, never absent: consumers must not have to branch on
+    which of the two parsers produced the row."""
+    vroot = tmp_path / "ventures"
+    pdir = vroot / "acme" / "projects" / "plain"
+    pdir.mkdir(parents=True)
+    (pdir / "project.md").write_text(
+        "---\nslug: plain\nname: Plain\nventure: acme\n---\n", encoding="utf-8")
+
+    lst = ventures_projects.list_for("acme", ventures_root=vroot)
+    assert lst[0]["practices"] == []
+    assert lst[0]["practice_count"] == 0
+
+
 def test_projects_are_deduped_across_slug_and_title(tmp_path: Path):
     """venture() looks up by slug AND by title; a project matching both must
     appear once, not twice."""

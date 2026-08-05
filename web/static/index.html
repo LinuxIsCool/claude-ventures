@@ -760,6 +760,14 @@
             `<div class="text-xs ml-4 ${m.done ? "line-through text-subtext" : ""}">
                ${esc(m.title)}${m.deadline ? `<span class="text-subtext ml-1">${esc(m.deadline)}</span>` : ""}
                ${m.stage ? `<span class="badge ml-1">${esc(m.stage)}</span>` : ""}</div>`).join("");
+          // Practices are the third tier and are NOT milestones: they never
+          // complete, so they get no done state and no deadline. Rendering
+          // them alongside milestones with a distinct marker is what stops
+          // `addr resolve` knowing about a node this page does not show.
+          const prs = (p.practices || []).map(pr =>
+            `<div class="text-xs ml-4 text-subtext">
+               <span class="text-mauve">↻</span> ${esc(pr.name || pr.slug)}
+               <span class="badge ml-1">practice</span></div>`).join("");
           return `<div class="mb-2">
             <div class="text-xs">
               <a href="#" class="text-blue" data-go='${esc(JSON.stringify({v:v.slug,p:p.slug}))}'>${esc(p.name||p.slug)}</a>
@@ -768,7 +776,7 @@
               ${p.owner ? `<span class="text-subtext ml-1">${esc(p.owner)}</span>` : ""}
             </div>
             ${p.objective ? `<div class="text-xs text-subtext ml-4">${esc(p.objective)}</div>` : ""}
-            ${mss}</div>`;
+            ${mss}${prs}</div>`;
         }).join("");
       },
       tasks(v) {
