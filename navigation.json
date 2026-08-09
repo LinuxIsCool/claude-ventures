@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "app": "ventures",
+  "destinations": [
+    {"id": "portfolio", "label": "Portfolio", "href": "/ventures/?view=portfolio", "keywords": ["ventures", "projects", "businesses"]},
+    {"id": "timeline", "label": "Timeline", "href": "/ventures/?view=timeline"},
+    {"id": "priorities", "label": "Priorities", "href": "/ventures/?view=priorities", "aliases": ["focus"]},
+    {"id": "trends", "label": "Trends", "href": "/ventures/?view=trends"}
+  ]
+}
