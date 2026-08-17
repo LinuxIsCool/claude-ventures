@@ -131,6 +131,7 @@
           <div id="lifecycle-chips" class="portfolio-toolbar mb-3"></div>
           <div id="selection-bar"></div>
           <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+          <div id="scoped-tasks" class="mt-4"></div>
         </div>
         <aside id="focus-rail" class="w-72 flex-none"></aside>
       </div>
@@ -227,14 +228,17 @@
     function saveStars() { localStorage.setItem(STARS_KEY, JSON.stringify([...state.stars])); }
     function saveFilters() { localStorage.setItem(FILTER_KEY, JSON.stringify([...state.statuses])); }
     function scopeQuery() {
+      // Highlighting is the live scope; stars are the standing fallback when
+      // nothing is highlighted, so a weekly focus survives a cleared selection.
       const p = new URLSearchParams();
-      p.set("ventures", [...state.stars].join(","));
+      const scoped = state.selected.size ? state.selected : state.stars;
+      p.set("ventures", [...scoped].join(","));
       p.set("lifecycle", [...state.statuses].join(",") || "all");
       return p.toString();
     }
     async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
     function ident(slug) { return state.identity[slug] || {}; }
-    function redrawSelection() { renderGrid(); renderSelectionBar(); renderFocusRail(); renderStats(); }
+    function redrawSelection() { renderGrid(); renderSelectionBar(); renderFocusRail(); renderStats(); renderScopedTasks(); }
     function toggleSelected(slug) {
       state.selected.has(slug) ? state.selected.delete(slug) : state.selected.add(slug);
       redrawSelection();
@@ -300,6 +304,32 @@
         taskList(data.records);
       wireGo(detail);
     }
+    async function renderScopedTasks() {
+      const host = document.getElementById("scoped-tasks");
+      if (!host) return;
+      const scoped = state.selected.size ? state.selected : state.stars;
+      if (!scoped.size) { host.innerHTML = ""; return; }
+      let data;
+      try { data = await api("api/tasks?" + scopeQuery()); }
+      catch (e) { host.innerHTML = `<p class="text-red text-xs p-3">Tasks could not load: ${esc(e.message||e)}</p>`; return; }
+      const rows = data.records || [];
+      const label = `${rows.length} task${rows.length===1?"":"s"} in ${scoped.size} venture${scoped.size===1?"":"s"}`;
+      if (!rows.length) { host.innerHTML = `<p class="text-subtext text-xs p-3">${label}.</p>`; return; }
+      const body = rows.map(t => {
+        const id = ident(t.venture), col = id.colour || "#9399b2";
+        return `<tr style="--hl:${col}">
+          <td><span class="row-title" style="--vc:${col}">${esc(id.emoji||"")} ${esc(t.venture)}</span></td>
+          <td><a href="${esc(t.href)}">${esc(t.title)}</a></td>
+          <td>${esc(t.status)}</td>
+          <td><span style="color:${dotColor(t.priority)}">${esc(t.priority)}</span></td>
+          <td>${t.due ? `${esc(t.due)}${t.overdue?' <span class="text-red">overdue</span>':""}` : `<span class="text-subtext">—</span>`}</td>
+        </tr>`;
+      }).join("");
+      host.innerHTML = `<div class="portfolio-toolbar mb-2"><strong class="text-xs">${label}</strong></div>
+        <div class="portfolio-table-wrap"><table class="portfolio-table">
+        <thead><tr><th scope="col">Venture</th><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Due</th></tr></thead>
+        <tbody>${body}</tbody></table></div>`;
+    }
     async function renderFocusRail() {
       const rail = document.getElementById("focus-rail");
       let f;
@@ -337,6 +367,7 @@
       await renderGrid(payload);
       renderSelectionBar();
       renderFocusRail();
+      renderScopedTasks();
     }
     function renderStub(label) {
       document.getElementById("portfolio-cols").classList.add("hidden");
