@@ -31,10 +31,16 @@ def venture(slug: str, ventures_root: Path | None = None, backlog_dir: Path | No
     out = {k: val for k, val in v.items() if not str(k).startswith("_")}
     projects = ventures_projects.list_for(slug, ventures_root=ventures_root) \
         + ventures_projects.list_for(v["title"], ventures_root=ventures_root)
+    for embedded in v.get("projects") or []:
+        if isinstance(embedded, dict):
+            project = dict(embedded)
+            project.setdefault("slug", str(project.get("id") or ""))
+            project.setdefault("venture", slug)
+            projects.append(project)
     seen: set[str] = set()
     deduped = []
     for p in projects:  # title and slug can both match the same project file
-        if p["slug"] in seen:
+        if not p.get("slug") or p["slug"] in seen:
             continue
         seen.add(p["slug"])
         deduped.append(p)
@@ -45,6 +51,20 @@ def venture(slug: str, ventures_root: Path | None = None, backlog_dir: Path | No
 
 def project(slug: str, ventures_root: Path | None = None, backlog_dir: Path | None = None) -> dict[str, Any]:
     p = ventures_projects.get(slug, ventures_root=ventures_root)
+    if p is None:
+        # Venture records may carry projects inline. Resolve those through the
+        # same route so the VentureApp Work module never creates dead links.
+        acc = VenturesAccessor(data_root=ventures_root)
+        for venture_record in acc._records():
+            for embedded in venture_record.get("projects") or []:
+                if not isinstance(embedded, dict):
+                    continue
+                embedded_slug = str(embedded.get("slug") or embedded.get("id") or "")
+                if embedded_slug == slug:
+                    p = {**embedded, "slug": embedded_slug, "venture": venture_record["slug"]}
+                    break
+            if p is not None:
+                break
     if p is None:
         return {"error": "not found", "slug": slug}
     p = dict(p)

@@ -8,7 +8,7 @@ can show *why* something ranks where it does (score_parts always sum to score).
 Read-through only: ventures come from `VenturesAccessor`, tasks from
 `ventures_backlog._cached_tasks`. No DB.
 
-Scoring formula (score = urgency + manual + stage + financial, 0-100)
+Scoring formula (score = urgency + manual + stage, 0-90)
 ---------------------------------------------------------------------
 urgency   (0-50): from the item's own date (task `due`, deadline `date`) vs today
                   - overdue (days < 0)            -> 50
@@ -19,7 +19,6 @@ manual    (0-30): item priority band
                   - critical=30, high=22, medium=12, low=4 (default medium)
 stage     (0-10): the VENTURE's stage
                   - active=10, exploring=6, sustaining=6, seed=4, dormant=2, harvesting=0
-financial (0-10): venture has revenue_to_date > 0 -> 10 else 0
 
 Sort: score DESC, tie-break by due ASC. An empty due ("") sorts last.
 
@@ -86,20 +85,11 @@ def _stage(stage: str) -> int:
     return _STAGE_BAND.get(str(stage or "").strip().lower(), 0)
 
 
-def _financial(financial: dict[str, Any]) -> int:
-    rev = (financial or {}).get("revenue_to_date") or 0
-    try:
-        return 10 if float(rev) > 0 else 0
-    except (TypeError, ValueError):
-        return 0
-
-
 def _score(item_date: date | None, priority: str, venture: dict[str, Any], today: date) -> dict[str, int]:
     parts = {
         "urgency": _urgency(item_date, today),
         "manual": _manual(priority),
         "stage": _stage(venture.get("stage", "")),
-        "financial": _financial(venture.get("financial", {})),
     }
     return parts
 
@@ -165,7 +155,11 @@ def ranked(ventures_root, backlog_dir, today: date) -> dict:
 
     # sort: score DESC, then due ASC with "" last
     items.sort(key=lambda it: (-it["score"], it["due"] or "9999-99-99"))
-    return {"items": items}
+    return {
+        "items": items,
+        "formula_version": 2,
+        "signals_available": {"urgency": True, "manual": True, "stage": True, "financial": False},
+    }
 
 
 def _deadline_excluded(dl: dict[str, Any]) -> bool:

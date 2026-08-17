@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 import ventures_cache
+from claude_backlog.venture_resolution import resolve_venture
 
 _BACKLOG_DEFAULT = Path.home() / ".claude" / "local" / "backlog"
 _PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -51,13 +52,20 @@ def _all_tasks(d: Path) -> list[dict[str, Any]]:
         if not fm:
             continue
         m = _ID_RE.search(str(fm.get("id") or md.stem))
+        resolution = resolve_venture(fm.get("venture"), project=fm.get("project"))
         out.append({
             "id": (m.group(1) if m else md.stem),
             "title": fm.get("title", md.stem),
             "status": fm.get("status", ""),
             "priority": str(fm.get("priority", "medium")),
-            "venture": fm.get("venture"),
+            "venture": resolution.canonical,
+            "venture_raw": fm.get("venture"),
+            "venture_resolution": resolution.as_dict(),
+            "program": fm.get("program") or resolution.program,
+            "project": fm.get("project") or resolution.project,
             "due": str(fm.get("due") or ""),
+            "blocked_by": fm.get("blocked_by") or [],
+            "dependencies": fm.get("dependencies") or [],
             "_parent_id": str(fm.get("parent_id") or ""),
         })
     return out
@@ -67,6 +75,15 @@ def _cached_tasks(d: Path) -> list[dict[str, Any]]:
     return ventures_cache.cached(
         _CACHE, str(d.resolve()), _signature(d), lambda: _all_tasks(d)
     )
+
+
+def all_tasks(backlog_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Return every parsed top-level backlog task without private join keys."""
+    d = Path(backlog_dir) if backlog_dir else _BACKLOG_DEFAULT
+    if not d.is_dir():
+        return []
+    return [{k: v for k, v in t.items() if not k.startswith("_")}
+            for t in _cached_tasks(d)]
 
 
 def _matches(t: dict, venture: str, project: str | None, milestone: str | None) -> bool:

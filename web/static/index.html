@@ -21,21 +21,86 @@
   .ui-card { background:#181825; border:1px solid #313244; border-radius:6px;
              padding:10px; transition:transform 0.15s ease, border-color 0.15s ease; }
   .ui-card:hover { transform:translateY(-2px); border-color:#cba6f766; background:#1e1e30; }
-  .ui-card.hl  { box-shadow:0 0 0 2px var(--hl,#cba6f7); }
-  /* Working-set star. Sized as a real 28px hit target rather than a glyph:
-     it is a control, and it was previously too small and too dim to find.
-     Hollow ☆ when unmarked, filled ★ when marked, so state reads at a glance
-     instead of depending on a colour difference. */
+  /* Ad-hoc selection is the outline; weekly focus is the independent star. */
+  .ui-card.selected { background:#242438; border-color:var(--hl,#89b4fa);
+                      box-shadow:0 0 0 2px color-mix(in srgb,var(--hl,#89b4fa) 72%,transparent); }
+  .venture-card-footer { display:flex; align-items:center; min-height:24px; margin-top:5px; }
+  .venture-card-metrics { display:flex; flex-wrap:wrap; gap:3px; margin-top:7px; }
+  .venture-card-metric { padding:1px 5px; border-radius:4px; background:#11111b;
+                         color:#9399b2; font-size:.61rem; white-space:nowrap; }
+  .venture-card-metric strong { color:#cdd6f4; font-weight:600; }
+  .venture-card-metric.overdue { color:#f38ba8; }
+  .venture-card-metric.overdue strong { color:#f38ba8; }
+  .portfolio-table-wrap { overflow:auto; max-width:calc(100vw - 22rem); border:1px solid #313244; border-radius:6px; }
+  .portfolio-table { width:max-content; min-width:100%; border-collapse:collapse; font-size:.68rem; }
+  .portfolio-table th { position:sticky; top:0; z-index:2; background:#181825; color:#bac2de;
+                        text-align:left; padding:7px 9px; border-bottom:1px solid #45475a;
+                        white-space:nowrap; cursor:pointer; }
+  .portfolio-table td { max-width:320px; padding:6px 9px; border-bottom:1px solid #313244;
+                        vertical-align:top; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .portfolio-table tbody tr { cursor:pointer; }
+  .portfolio-table tbody tr:hover { background:#1e1e30; }
+  .portfolio-table tbody tr.selected { background:#242438; box-shadow:inset 3px 0 var(--hl,#89b4fa); }
+  .portfolio-table .row-title { color:var(--vc,#89b4fa); font-weight:600; }
+  .venture-app-tabs { display:flex; flex-wrap:wrap; gap:4px; margin:10px 0 16px; padding-bottom:8px;
+                      border-bottom:1px solid #313244; }
+  .venture-app-tab { border:1px solid transparent; border-radius:4px; background:transparent;
+                     color:#9399b2; cursor:pointer; padding:4px 8px; font:inherit; font-size:.68rem; }
+  .venture-app-tab:hover { color:#89b4fa; background:#1e1e30; }
+  .venture-app-tab.active { color:var(--vc,#cba6f7); border-color:var(--vc,#cba6f7);
+                            background:color-mix(in srgb,var(--vc,#cba6f7) 10%,transparent); }
+  .venture-app-hero { display:flex; gap:10px; align-items:center; }
+  .venture-app-hero .sigil { font-size:1.7rem; }
+  .venture-details-btn { border:1px solid color-mix(in srgb,var(--vc,#a6adc8) 55%,transparent);
+                         border-radius:4px;
+                         background:color-mix(in srgb,var(--vc,#a6adc8) 10%,#181825);
+                         color:var(--vc,#a6adc8); cursor:pointer; padding:2px 7px; margin-left:auto;
+                         font:inherit; font-size:.64rem; line-height:1.25; }
+  .venture-details-btn:hover, .venture-details-btn:focus-visible {
+    color:var(--vc,#89b4fa); border-color:var(--vc,#89b4fa);
+    background:color-mix(in srgb,var(--vc,#89b4fa) 22%,#181825);
+    box-shadow:0 0 8px color-mix(in srgb,var(--vc,#89b4fa) 24%,transparent); }
+  /* Selection star: a second hit target for the same state as the card. */
   .star-btn { display:inline-flex; align-items:center; justify-content:center;
               width:28px; height:28px; margin:-5px -5px 0 0; flex:none;
               border-radius:7px; font-size:1.15rem; line-height:1;
-              cursor:pointer; user-select:none; color:#6c7086;
+              cursor:pointer; user-select:none; color:#6c7086; background:transparent;
               border:1px solid transparent;
               transition:color .12s, background .12s, border-color .12s, transform .12s; }
   .star-btn:hover { color:var(--sc,#cba6f7); background:#313244;
                     border-color:#45475a; transform:scale(1.12); }
-  .star-btn.on { color:var(--sc,#cba6f7); }
+  .star-btn.on { color:var(--sc,#cba6f7);
+                 background:color-mix(in srgb,var(--sc,#cba6f7) 12%,transparent);
+                 border-color:color-mix(in srgb,var(--sc,#cba6f7) 32%,transparent); }
   .star-btn.on:hover { background:#313244; }
+  .portfolio-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px;
+                       background:#151521; border:1px solid #313244; border-radius:8px; }
+  .toolbar-label { color:#6c7086; font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; }
+  .toolbar-divider { width:1px; align-self:stretch; min-height:26px; background:#313244; }
+  .view-switch { display:inline-flex; padding:2px; border:1px solid #45475a; border-radius:6px; background:#11111b; }
+  .view-button { border:0; border-radius:4px; background:transparent; color:#9399b2; cursor:pointer;
+                 font:inherit; font-size:.68rem; padding:4px 9px; }
+  .view-button:hover { color:#cdd6f4; }
+  .view-button.active { color:#11111b; background:#cba6f7; }
+  .toolbar-action { border:1px solid #45475a; border-radius:5px; background:#181825; color:#bac2de;
+                    cursor:pointer; font:inherit; font-size:.67rem; padding:4px 8px; }
+  .toolbar-action:hover { border-color:#89b4fa; color:#89b4fa; }
+  .toolbar-action.active { border-color:#a6e3a1; color:#a6e3a1; background:#1b2a25; }
+  .toolbar-action.star-action { color:#f9e2af; }
+  .toolbar-action.star-action.active { color:#f9e2af; border-color:#f9e2af;
+                                       background:color-mix(in srgb,#f9e2af 14%,#181825); }
+  .scope-switch .view-button.active.starred { color:#11111b; background:#f9e2af; }
+  .filter-popover { position:relative; }
+  .filter-popover summary { list-style:none; }
+  .filter-popover summary::-webkit-details-marker { display:none; }
+  .filter-menu { position:absolute; z-index:20; top:calc(100% + 6px); left:0; min-width:190px;
+                 padding:8px; border:1px solid #45475a; border-radius:7px; background:#181825;
+                 box-shadow:0 10px 30px #0008; }
+  .filter-option { display:flex; align-items:center; gap:8px; padding:5px; cursor:pointer; font-size:.68rem; }
+  .filter-option .count { margin-left:auto; color:#6c7086; }
+  .work-select { appearance:none; padding-right:24px; cursor:pointer; }
+  .selection-bar { display:flex; align-items:center; gap:8px; padding:7px 9px; margin-bottom:10px;
+                   border:1px solid #89b4fa66; border-radius:7px; background:#18202d; font-size:.7rem; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -54,7 +119,7 @@
 <body class="bg-base text-text font-mono">
   <header class="flex items-center gap-4 p-3 border-b border-overlay">
     <h1 class="font-pixel text-mauve text-sm">claude-ventures</h1>
-    <input id="search" class="input flex-1" placeholder="filter ventures…" />
+    <input id="search" class="input flex-1" placeholder="Search ventures, projects, milestones, tasks, people, prompts…" />
     <span id="healthz-slot" class="badge"></span>
   </header>
 
@@ -63,7 +128,8 @@
     <main id="page" class="flex-1 p-3">
       <div id="portfolio-cols" class="flex gap-4 items-start">
         <div class="flex-1 min-w-0">
-          <div id="lifecycle-chips" class="flex flex-wrap gap-1 mb-3"></div>
+          <div id="lifecycle-chips" class="portfolio-toolbar mb-3"></div>
+          <div id="selection-bar"></div>
           <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
         </div>
         <aside id="focus-rail" class="w-72 flex-none"></aside>
@@ -75,7 +141,12 @@
 
   <script src="static/embedded-bar.js"></script>
   <script>
-    const state = { lifecycle: "all", q: "", view: "portfolio", highlights: new Set(), focusOnly: false, identity: {}, ventures: [] };
+    const FILTER_KEY = "ventures.statusFilters";
+    function loadFilters() { try { return new Set(JSON.parse(localStorage.getItem(FILTER_KEY) || '[]').filter(x=>x!=="all")); } catch (_) { return new Set(); } }
+    const state = { statuses: loadFilters(), q: "", view: "portfolio", portfolioMode: "cards",
+                    sort: [], stars: new Set(), selected: new Set(),
+                    scope: "all", work: "any",
+                    identity: {}, ventures: [], portfolioBase: null, portfolioBasePromise: null, portfolioBaseKey: "" };
     const VIEWS = ["portfolio", "timeline", "priorities", "trends"];
     const dotColor = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
     const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
@@ -83,6 +154,13 @@
     function qs() { return new URLSearchParams(location.search); }
     function go(params) {
       const u = new URL(location); u.search = new URLSearchParams(params).toString();
+      history.pushState({}, "", u); route();
+    }
+    function setPortfolioParams(changes) {
+      const u = new URL(location);
+      u.searchParams.set("view", "portfolio");
+      Object.entries(changes).forEach(([key,value]) => value == null
+        ? u.searchParams.delete(key) : u.searchParams.set(key, value));
       history.pushState({}, "", u); route();
     }
     function showPage() {
@@ -102,6 +180,15 @@
       if (p.get("v")) { return renderVenture(p.get("v")); }
       const view = VIEWS.includes(p.get("view")) ? p.get("view") : "portfolio";
       state.view = view;
+      state.portfolioMode = p.get("mode") === "rows" ? "rows" : "cards";
+      state.scope = p.get("scope") === "starred" || p.get("stars") === "1" ? "starred" : "all";
+      state.work = ["has","none"].includes(p.get("work")) ? p.get("work") : "any";
+      if (p.has("status")) state.statuses = new Set(p.get("status").split(",").filter(Boolean));
+      state.q = (p.get("q") || "").toLowerCase();
+      document.getElementById("search").value = state.q;
+      state.sort = (p.get("sort") || "").split(",").filter(Boolean).map(spec => {
+        const [key,direction] = spec.split(":"); return {key, direction:direction === "desc" ? "desc" : "asc"};
+      });
       showPage();
       renderNav();
       if (view === "portfolio") return renderPortfolio();
@@ -127,109 +214,128 @@
       return { active:"text-green", exploring:"text-blue",
                dormant:"text-subtext", harvesting:"text-yellow" }[lc] || "text-text";
     }
-    // ---- identity (emoji + colour) + the working set ----
-    //
-    // Two separate things, deliberately. MARKING a venture (★) is local and
-    // cheap: it joins your working set and that card gets a ring. FILTERING to
-    // the working set is a distinct, explicit toggle that lives in the chip row
-    // with every other filter.
-    //
-    // They used to be one variable, so a single click both marked a venture and
-    // silently narrowed the grid AND the focus rail. That was tolerable when the
-    // gesture was a whole-card click, and became disproportionate once the card
-    // click was given back to "open". Effects should be the size of the gesture
-    // that caused them.
-    //
-    // The set persists (it is something you curate); the filter does not (it is
-    // a view you switch on).
-    const HL_KEY = "ventures.highlights";
-    function loadHL() { try { return new Set(JSON.parse(localStorage.getItem(HL_KEY) || "[]")); } catch (e) { return new Set(); } }
-    function saveHL() { localStorage.setItem(HL_KEY, JSON.stringify([...state.highlights])); }
+    // ---- identity + persistent weekly stars + ephemeral working selection ----
+    const STARS_KEY = "ventures.stars";
+    const LEGACY_SELECTION_KEY_2 = "ventures.selection";
+    const LEGACY_SELECTION_KEY = "ventures.highlights";
+    function loadStars() {
+      try {
+        const raw = localStorage.getItem(STARS_KEY) ?? localStorage.getItem(LEGACY_SELECTION_KEY_2) ?? localStorage.getItem(LEGACY_SELECTION_KEY) ?? "[]";
+        return new Set(JSON.parse(raw));
+      } catch (e) { return new Set(); }
+    }
+    function saveStars() { localStorage.setItem(STARS_KEY, JSON.stringify([...state.stars])); }
+    function saveFilters() { localStorage.setItem(FILTER_KEY, JSON.stringify([...state.statuses])); }
+    function scopeQuery() {
+      const p = new URLSearchParams();
+      p.set("ventures", [...state.stars].join(","));
+      p.set("lifecycle", [...state.statuses].join(",") || "all");
+      return p.toString();
+    }
     async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
     function ident(slug) { return state.identity[slug] || {}; }
-    function redrawWorkingSet() { renderGrid(); renderFocusRail(); renderStats(); }
-    function toggleHighlight(slug) {   // mark / unmark. Local effect only.
-      state.highlights.has(slug) ? state.highlights.delete(slug) : state.highlights.add(slug);
-      if (!state.highlights.size) state.focusOnly = false;  // nothing left to focus on
-      saveHL(); redrawWorkingSet();
+    function redrawSelection() { renderGrid(); renderSelectionBar(); renderFocusRail(); renderStats(); }
+    function toggleSelected(slug) {
+      state.selected.has(slug) ? state.selected.delete(slug) : state.selected.add(slug);
+      redrawSelection();
     }
-    async function renderStats() {
-      const s = await api("api/stats");
-      document.getElementById("healthz-slot").textContent =
-        `${s.key_metric} active · ${s.overdue_total} overdue`;
+    function toggleStarred(slug) {
+      state.stars.has(slug) ? state.stars.delete(slug) : state.stars.add(slug);
+      state.portfolioBase = null;
+      state.portfolioBasePromise = null;
+      saveStars(); redrawSelection();
+    }
+    function renderSelectionBar() {
+      const host = document.getElementById("selection-bar");
+      if (!state.selected.size) { host.innerHTML = ""; return; }
+      const visible = state.ventures.filter(v => state.selected.has(v.slug)).length;
+      const label = visible === state.selected.size ? `${state.selected.size} selected` : `${visible} of ${state.selected.size} selected visible`;
+      host.innerHTML = `<div class="selection-bar"><strong>${label}</strong><span style="flex:1"></span>
+        <button type="button" class="toolbar-action" data-open-selected>Open selected</button>
+        <button type="button" class="toolbar-action" data-clear-selected>Clear selection</button></div>`;
+      host.querySelector("[data-open-selected]").onclick = () => renderVentureSet("Selected", [...state.selected]);
+      host.querySelector("[data-clear-selected]").onclick = () => { state.selected.clear(); redrawSelection(); };
+    }
+    async function renderStats(facetPayload=null) {
+      facetPayload = facetPayload || await loadPortfolioBase();
       const chips = document.getElementById("lifecycle-chips");
-      chips.innerHTML = `<span class="chip ${state.lifecycle==="all"?"active":""}" data-lc="all">All</span>` +
-        Object.entries(s.by_lifecycle).map(([lc,n]) =>
-          `<span class="chip ${state.lifecycle===lc?"active":""}" data-lc="${esc(lc)}">${esc(lc)} (${esc(n)})</span>`).join("");
-      chips.querySelectorAll("[data-lc]").forEach(el =>
-        el.onclick = () => { state.lifecycle = el.dataset.lc; renderStats(); renderGrid(); });
-      if (state.highlights.size) {
-        // The filter toggle, in the chip row alongside every other filter.
-        const c = document.createElement("span");
-        c.className = "chip" + (state.focusOnly ? " active" : "");
-        if (state.focusOnly) { c.style.borderColor = "#cba6f7"; c.style.color = "#cba6f7"; }
-        c.textContent = `★ working set (${state.highlights.size})`;
-        c.title = state.focusOnly
-          ? "showing only your working set — click to show all ventures"
-          : "click to show only your working set, here and in the focus rail";
-        c.onclick = () => { state.focusOnly = !state.focusOnly; redrawWorkingSet(); };
-        chips.appendChild(c);
-
-        const clr = document.createElement("span");
-        clr.className = "chip"; clr.textContent = "clear ✕";
-        clr.title = "unmark every venture";
-        clr.onclick = () => {
-          state.highlights.clear(); state.focusOnly = false; saveHL(); redrawWorkingSet();
-        };
-        chips.appendChild(clr);
-      }
+      const statusCounts = (facetPayload.facets || {}).status || {};
+      const baseRecords = facetPayload.records || [];
+      const statusRecords = state.statuses.size ? baseRecords.filter(r=>state.statuses.has(r.status)) : baseRecords;
+      const workCount = statusRecords.filter(r=>r.has_work).length;
+      const statusCount = state.work === "has" ? workCount : statusRecords.length;
+      const statusName = !state.statuses.size ? "Any" : state.statuses.size === 1 ? [...state.statuses][0][0].toUpperCase()+[...state.statuses][0].slice(1) : `${state.statuses.size} selected`;
+      const statusLabel = `Status: ${statusName} (${statusCount})`;
+      chips.innerHTML = `<button type="button" class="toolbar-action ${state.scope==="starred"?"star-action active":""}" data-toggle-stars
+          aria-pressed="${state.scope==="starred"}">★ Stars (${state.stars.size})</button>
+        <button type="button" class="toolbar-action ${state.work==="has"?"active":""}" data-toggle-work
+          aria-pressed="${state.work==="has"}">⚒ Has Work (${workCount})</button>
+        <details class="filter-popover"><summary class="toolbar-action" role="button">${statusLabel} ▾</summary><div class="filter-menu" role="group" aria-label="Filter by status">
+          ${[["exploring","Exploring"],["active","Active"],["complete","Complete"]].map(([key,label])=>`<label class="filter-option"><input type="checkbox" data-status="${key}" ${state.statuses.has(key)?"checked":""}>${label}<span class="count">${statusCounts[key]||0}</span></label>`).join("")}
+          <button type="button" class="toolbar-action" data-clear-status>Clear</button></div></details>`;
+      chips.insertAdjacentHTML("beforeend", `<span style="flex:1"></span><span class="toolbar-label">View</span>
+        <div class="view-switch" role="group" aria-label="Portfolio layout">
+          <button type="button" class="view-button ${state.portfolioMode==="cards"?"active":""}" data-mode="cards" aria-pressed="${state.portfolioMode==="cards"}">▦ Cards</button>
+          <button type="button" class="view-button ${state.portfolioMode==="rows"?"active":""}" data-mode="rows" aria-pressed="${state.portfolioMode==="rows"}">☷ Rows</button>
+        </div>`);
+      chips.querySelector("[data-toggle-stars]").onclick = () => setPortfolioParams({scope:state.scope==="starred"?null:"starred",stars:null});
+      chips.querySelector("[data-toggle-work]").onclick = () => setPortfolioParams({work:state.work==="has"?null:"has"});
+      chips.querySelectorAll("[data-status]").forEach(el => el.onchange = () => {
+        el.checked ? state.statuses.add(el.dataset.status) : state.statuses.delete(el.dataset.status);
+        saveFilters(); setPortfolioParams({status:state.statuses.size?[...state.statuses].join(","):null});
+      });
+      chips.querySelector("[data-clear-status]").onclick = () => { state.statuses.clear(); saveFilters(); setPortfolioParams({status:null}); };
+      chips.querySelectorAll("[data-mode]").forEach(el => el.onclick = () => setPortfolioParams({mode:el.dataset.mode}));
+      Promise.all([api("api/widgets/active_tasks?" + scopeQuery()), api("api/widgets/overdue_tasks?" + scopeQuery())]).then(([active,overdue]) => {
+        document.getElementById("healthz-slot").innerHTML =
+          `<a href="#" data-task-widget="active">${active.count} active</a> · <a href="#" data-task-widget="overdue">${overdue.count} overdue</a>`;
+        document.querySelectorAll("[data-task-widget]").forEach(el => el.onclick = e => { e.preventDefault(); renderTaskWidget(el.dataset.taskWidget); });
+      });
+    }
+    async function renderTaskWidget(kind) {
+      const data = await api(`api/widgets/${kind}_tasks/records?` + scopeQuery());
+      enterDetail();
+      const detail = document.getElementById("detail");
+      detail.innerHTML = backBar([{label:"Portfolio",href:{view:"portfolio"}}, {label:`${data.count} ${kind} tasks`}]) +
+        taskList(data.records);
+      wireGo(detail);
     }
     async function renderFocusRail() {
       const rail = document.getElementById("focus-rail");
       let f;
-      try { f = await api("api/focus"); }
+      try { f = await api("api/focus?" + scopeQuery()); }
       catch (e) { rail.innerHTML = ""; return; }
       const cols = [
         { key:"today", label:"Today" },
         { key:"this_week", label:"This Week" },
         { key:"soon", label:"Soon" },
-        { key:"attention", label:"Needs attention" },
+        { key:"backlog", label:"Backlog", collapsed:true },
       ];
-      // The rail narrows only when the working-set filter is explicitly ON.
-      // Previously it narrowed the moment anything was marked, which made a
-      // small star quietly change a panel elsewhere on the page.
-      const hl = state.highlights;
-      const hlTitles = new Set(state.ventures.filter(v => hl.has(v.slug)).map(v => v.title));
-      const keep = it => !state.focusOnly || !hl.size
-        || hl.has(it.venture) || hlTitles.has(it.venture) || hl.has((it.ref || {}).v);
       const colHtml = c => {
-        const items = (f[c.key] || []).filter(keep);
+        const items = f[c.key] || [];
         const body = items.length ? items.map((it, i) => `
-          <div class="focus-item" data-go='${esc(JSON.stringify(it.ref||{}))}'>
+          <a class="focus-item block" href="${esc(it.href)}">
             <div class="flex items-center gap-2 text-xs">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:${dotColor(it.priority)}"></span>
               <span class="flex-1">${esc(it.title)}</span>
             </div>
             <div class="text-subtext text-xs ml-4">${esc(it.venture)} · ${esc(it.date)}</div>
-          </div>`).join("")
+          </a>`).join("")
           : `<p class="text-subtext text-xs">nothing scheduled</p>`;
-        return `<div class="focus-col">
-          <div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)}</div>
-          <div class="space-y-1">${body}</div>
-        </div>`;
+        if (c.collapsed) return `<details class="focus-col"><summary class="font-pixel text-xs text-mauve mb-2 cursor-pointer">${esc(c.label)} (${items.length})</summary><div class="space-y-1">${body}</div></details>`;
+        return `<div class="focus-col"><div class="font-pixel text-xs text-mauve mb-2">${esc(c.label)}</div><div class="space-y-1">${body}</div></div>`;
       };
       rail.innerHTML = `<div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">` +
         cols.map(colHtml).join("") + `</div>`;
-      wireGo(rail);
     }
     async function renderPortfolio() {
       document.getElementById("portfolio-cols").classList.remove("hidden");
       document.getElementById("placeholder").classList.add("hidden");
       if (!Object.keys(state.identity).length) await loadIdentity();
-      await renderStats();
-      // grid first so state.ventures is populated for the focus-rail highlight filter;
-      // separate columns mean no vertical reflow / flash regardless of order.
-      await renderGrid();
+      const payload = await loadPortfolioBase();
+      renderStats(payload);
+      await renderGrid(payload);
+      renderSelectionBar();
       renderFocusRail();
     }
     function renderStub(label) {
@@ -392,7 +498,7 @@
       if (!items.length) { host.innerHTML = `<p class="text-subtext text-sm">no priorities</p>`; return; }
       const row = it => {
         const sp = it.score_parts || {};
-        const tip = `urgency ${sp.urgency||0} · manual ${sp.manual||0} · stage ${sp.stage||0} · financial ${sp.financial||0}`;
+        const tip = `urgency ${sp.urgency||0} · manual ${sp.manual||0} · stage ${sp.stage||0}`;
         return `<div class="ui-card" style="cursor:pointer" data-go='${esc(JSON.stringify(it.ref||{}))}'>
           <div class="flex items-center gap-2">
             <span class="badge" title="${esc(tip)}" style="border-color:${dotColor(it.priority)};color:${dotColor(it.priority)}">${esc(it.score)}</span>
@@ -495,45 +601,166 @@
         (misc.length ? group("Other", misc) : "") ||
         `<p class="text-subtext text-sm">no trend data yet</p>`;
     }
-    async function renderGrid() {
-      let items = await api("api/list");
+    function visiblePortfolioRecords(payload) {
+      let records = [...(payload.records || [])];
+      if (state.statuses.size) records = records.filter(r => state.statuses.has(r.status));
+      if (state.work === "has") records = records.filter(r => r.has_work);
+      if (state.sort.length) for (const spec of [...state.sort].reverse()) records.sort((a,b) => {
+        const av=a[spec.key], bv=b[spec.key]; const cmp=av==null?1:bv==null?-1:typeof av==="number"&&typeof bv==="number"?av-bv:String(av).localeCompare(String(bv));
+        return spec.direction === "desc" ? -cmp : cmp;
+      });
+      return records;
+    }
+    function basePortfolioQuery() {
+      const p = new URLSearchParams();
+      if (state.q) p.set("q", state.q);
+      if (state.scope !== "all") p.set("scope", state.scope);
+      p.set("stars", [...state.stars].join(","));
+      return p.toString();
+    }
+    async function loadPortfolioBase() {
+      const key = basePortfolioQuery();
+      if (state.portfolioBase && state.portfolioBaseKey === key) return state.portfolioBase;
+      if (state.portfolioBasePromise && state.portfolioBaseKey === key) return state.portfolioBasePromise;
+      state.portfolioBaseKey = key;
+      state.portfolioBasePromise = api("api/portfolio?" + key);
+      state.portfolioBase = await state.portfolioBasePromise;
+      state.portfolioBasePromise = null;
+      return state.portfolioBase;
+    }
+    async function renderGrid(payload=null) {
+      payload = payload || await loadPortfolioBase();
+      if (state.portfolioMode === "rows") return renderPortfolioRows(payload);
+      const grid = document.getElementById("grid");
+      grid.className = "grid gap-3";
+      grid.style.gridTemplateColumns = "repeat(auto-fill,minmax(240px,1fr))";
+      let items = visiblePortfolioRecords(payload);
       state.ventures = items;
-      if (state.lifecycle !== "all") items = items.filter(i => i.lifecycle === state.lifecycle);
-      if (state.q) items = items.filter(i => i.title.toLowerCase().includes(state.q));
-      // Filter, don't dim. Dimming was a way of faking a filter; now that the
-      // chip filters properly, cards outside the working set are simply absent.
-      if (state.focusOnly && state.highlights.size) {
-        items = items.filter(i => state.highlights.has(i.slug));
-      }
       document.getElementById("grid").innerHTML = items.map(i => {
         const id = ident(i.slug), col = id.colour || "#9399b2";
-        const cls = state.highlights.has(i.slug) ? "hl" : "";
+        const m = {today:i["task.today"]||0,this_week:i["task.this_week"]||0,soon:i["task.soon"]||0,backlog:i["task.backlog"]||0,overdue:i["task.overdue"]||0};
+        const cls = state.selected.has(i.slug) ? "selected" : "";
         return `
-        <div class="ui-card cursor-pointer ${cls}" data-slug="${esc(i.slug)}" style="border-left:4px solid ${col};--hl:${col}">
+        <div class="ui-card cursor-pointer ${cls}" data-slug="${esc(i.slug)}" role="button" tabindex="0"
+             aria-selected="${state.selected.has(i.slug)}" aria-label="Select ${esc(i.title)}"
+             style="border-left:4px solid ${col};--hl:${col}">
           <div class="flex items-start gap-2">
             <span class="text-sm leading-none">${id.emoji || ""}</span>
             <div class="flex-1 min-w-0">
               <div class="font-pixel text-xs truncate" style="color:${col}">${esc(i.title)}</div>
-              <div class="text-subtext text-xs mt-1">${esc(i.stage)} · ${esc(i.priority)}</div>
+              <div class="text-subtext text-xs mt-1">${esc(i.status)} · ${esc(i.priority)}</div>
             </div>
-            <span class="star-btn ${state.highlights.has(i.slug) ? "on" : ""}" data-hl="${esc(i.slug)}"
-                  title="${state.highlights.has(i.slug) ? "remove from working set" : "add to working set"}"
-                  style="--sc:${col}">${state.highlights.has(i.slug) ? "★" : "☆"}</span>
+            <button type="button" class="star-btn ${state.stars.has(i.slug) ? "on" : ""}" data-star="${esc(i.slug)}"
+                  aria-pressed="${state.stars.has(i.slug)}" aria-label="${state.stars.has(i.slug) ? "Unstar" : "Star"} ${esc(i.title)}"
+                  title="${state.stars.has(i.slug) ? "remove from weekly focus" : "add to weekly focus"}"
+                  style="--sc:${col}">${state.stars.has(i.slug) ? "★" : "☆"}</button>
           </div>
-          ${i.overdue_count ? `<div class="badge bg-red/20 text-red mt-1">${esc(i.overdue_count)} overdue</div>` : ""}
+          <div class="venture-card-metrics" aria-label="Task schedule counts">
+            <span class="venture-card-metric"><strong>${m.today}</strong> today</span>
+            <span class="venture-card-metric"><strong>${m.this_week}</strong> week</span>
+            <span class="venture-card-metric"><strong>${m.soon}</strong> soon</span>
+            <span class="venture-card-metric"><strong>${m.backlog}</strong> backlog</span>
+            <span class="venture-card-metric overdue"><strong>${m.overdue}</strong> overdue</span>
+          </div>
+          <div class="venture-card-footer">
+            <button type="button" class="venture-details-btn" data-details="${esc(i.slug)}" style="--vc:${col}">Details</button>
+          </div>
         </div>`; }).join("");
-      const grid = document.getElementById("grid");
-      // Clicking a card OPENS that venture. That is the obvious meaning of
-      // clicking a card and it is what the whole grid is for. The highlight
-      // filter lives on its own always-visible ★, so it stays available
-      // without hijacking the primary action or hiding behind a hover state.
       grid.querySelectorAll(".ui-card").forEach(el => el.onclick = (e) => {
-        if (e.target.closest("[data-hl]")) return;
-        go({ v: el.dataset.slug });
+        if (e.target.closest("[data-star], [data-details]")) return;
+        toggleSelected(el.dataset.slug);
       });
-      grid.querySelectorAll("[data-hl]").forEach(el => el.onclick = (e) => {
-        e.stopPropagation(); toggleHighlight(el.dataset.hl);
+      grid.querySelectorAll(".ui-card").forEach(el => el.onkeydown = e => {
+        if ((e.key === "Enter" || e.key === " ") && !e.target.closest("button")) {
+          e.preventDefault(); toggleSelected(el.dataset.slug);
+        }
       });
+      grid.querySelectorAll("[data-star]").forEach(el => el.onclick = (e) => {
+        e.stopPropagation(); toggleStarred(el.dataset.star);
+      });
+      grid.querySelectorAll("[data-details]").forEach(el => el.onclick = (e) => {
+        e.stopPropagation(); go({ v: el.dataset.details });
+      });
+    }
+    function portfolioQuery(includeStatus=true, includeWork=true) {
+      const p = new URLSearchParams();
+      if (state.q) p.set("q", state.q);
+      if (includeStatus && state.statuses.size) p.set("status", [...state.statuses].join(","));
+      p.set("selected", [...state.selected].join(","));
+      if (includeWork && state.work !== "any") p.set("work", state.work);
+      if (state.scope !== "all") p.set("scope", state.scope);
+      p.set("stars", [...state.stars].join(","));
+      if (state.sort.length) p.set("sort", state.sort.map(s => `${s.key}:${s.direction}`).join(","));
+      return p.toString();
+    }
+    function rowValue(value) {
+      if (value === null || value === undefined || value === "") return `<span class="text-subtext">—</span>`;
+      if (typeof value === "boolean") return value ? "yes" : "no";
+      const text = String(value);
+      return `<span title="${esc(text)}">${esc(text.length > 90 ? text.slice(0,87)+"…" : text)}</span>`;
+    }
+    async function renderPortfolioRows(payload=null) {
+      const grid = document.getElementById("grid");
+      grid.className = "portfolio-table-wrap";
+      grid.style.gridTemplateColumns = "";
+      grid.innerHTML = `<p class="text-subtext text-xs p-3">Loading row data…</p>`;
+      try {
+        payload = payload || await loadPortfolioBase();
+      } catch (error) {
+        grid.innerHTML = `<div class="p-3"><p class="text-red text-xs">Row view could not load: ${esc(error.message||error)}</p>
+          <p class="text-subtext text-xs mt-2">The Ventures backend may be older than this page. Restart the Legion Hub and retry.</p></div>`;
+        return;
+      }
+      const records = visiblePortfolioRecords(payload);
+      state.ventures = records;
+      const preset = ["title","status","priority","type","task.today","task.this_week","task.soon","task.backlog","task.overdue","projects.__count","milestones.__count","description"];
+      const byKey = new Map((payload.schema.columns || []).map(c => [c.key,c]));
+      const columns = preset.filter(key => byKey.has(key)).map(key => byKey.get(key));
+      const sortMap = new Map(state.sort.map((s,i) => [s.key,{...s,index:i+1}]));
+      const head = columns.map(c => {
+        const s = sortMap.get(c.key);
+        return `<th scope="col" data-sort="${esc(c.key)}" title="sort by ${esc(c.label)}">${esc(c.label)}${s ? ` ${s.direction==="asc"?"↑":"↓"}${state.sort.length>1?s.index:""}` : ""}</th>`;
+      }).join("");
+      const body = records.map(record => {
+        const id = ident(record.slug), col = id.colour || record.identity_colour || "#9399b2";
+        return `<tr data-row-select="${esc(record.slug)}" class="${state.selected.has(record.slug)?"selected":""}" style="--hl:${col}">
+          <td><button type="button" class="star-btn ${state.stars.has(record.slug)?"on":""}" data-star="${esc(record.slug)}" aria-pressed="${state.stars.has(record.slug)}" style="--sc:${col}">${state.stars.has(record.slug)?"★":"☆"}</button></td>
+          <td><button type="button" class="venture-details-btn" data-details="${esc(record.slug)}" style="--vc:${col}">Details</button></td>
+          ${columns.map(c => `<td>${c.key === "title" ? `<span class="row-title" style="--vc:${col}">${esc(id.emoji||record.emoji||"")} ${esc(record.title||record.slug)}</span>` : rowValue(record[c.key])}</td>`).join("")}
+        </tr>`;
+      }).join("");
+      grid.innerHTML = `<table class="portfolio-table"><thead><tr><th>Focus</th><th>Open</th>${head}</tr></thead><tbody>${body}</tbody></table>` +
+        (!records.length ? `<p class="text-subtext text-xs p-3">No ventures match this view.</p>` : "");
+      grid.querySelectorAll("[data-sort]").forEach(el => el.onclick = e => {
+        const key = el.dataset.sort, existing = state.sort.find(s => s.key === key);
+        let next = existing ? (existing.direction === "asc" ? "desc" : null) : "asc";
+        let sorts = e.shiftKey ? state.sort.filter(s => s.key !== key) : [];
+        if (next) sorts.push({key,direction:next});
+        setPortfolioParams({sort: sorts.length ? sorts.map(s=>`${s.key}:${s.direction}`).join(",") : null});
+      });
+      grid.querySelectorAll("[data-row-select]").forEach(el => el.onclick = e => {
+        if (e.target.closest("[data-star], [data-details]")) return;
+        toggleSelected(el.dataset.rowSelect);
+      });
+      grid.querySelectorAll("[data-star]").forEach(el => el.onclick = e => {
+        e.stopPropagation(); toggleStarred(el.dataset.star);
+      });
+      grid.querySelectorAll("[data-details]").forEach(el => el.onclick = e => {
+        e.stopPropagation(); go({v:el.dataset.details});
+      });
+    }
+    async function renderVentureSet(label, slugs) {
+      const records = await Promise.all(slugs.map(slug => api("api/venture/" + encodeURIComponent(slug))));
+      const d = enterDetail();
+      d.innerHTML = backBar([{label:"← Portfolio",href:{view:"portfolio"}},{label:`${label} (${records.length})`}]) +
+        `<h1 class="font-pixel text-mauve text-sm mb-3">${esc(label)}</h1>` +
+        records.filter(v => !v.error).map(v => `<section class="ui-card mb-3" style="border-left:4px solid ${esc((ident(v.slug)||{}).colour||'#9399b2')}">
+          <div class="flex items-center gap-2"><span>${esc((ident(v.slug)||{}).emoji||'')}</span>
+          <button type="button" class="venture-details-btn font-pixel" data-go='${esc(JSON.stringify({v:v.slug}))}'>${esc(v.title)}</button></div>
+          <p class="text-xs text-subtext mt-2">${esc(v.description||'No description')}</p>
+          <div class="text-xs mt-2">${esc(v.stage||v.lifecycle)} · ${esc(v.priority||'medium')} · ${(v.tasks||[]).length} linked tasks</div>
+        </section>`).join("");
+      wireGo(d);
     }
     function backBar(crumbs) {
       return `<div class="mb-4 text-xs text-subtext">` +
@@ -549,13 +776,13 @@
       if (!tasks || !tasks.length) return `<p class="text-subtext text-xs">no linked tasks yet</p>`;
       const dot = p => ({critical:'#f38ba8',high:'#fab387',medium:'#89b4fa',low:'#7f849c'}[p]||'#7f849c');
       return `<div class="space-y-1">` + tasks.map(t=>`
-        <div class="flex items-center gap-2 text-xs">
+        <a class="flex items-center gap-2 text-xs" href="${esc(t.href || ('/backlog/tasks/'+encodeURIComponent(t.id)))}">
           <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot(t.priority)}"></span>
           <span class="text-subtext">#${esc(t.id)}</span>
           <span class="flex-1">${esc(t.title)}</span>
           <span class="badge">${esc(t.status)}</span>
           ${t.due?`<span class="text-subtext">${esc(t.due)}</span>`:""}
-        </div>`).join("") + `</div>`;
+        </a>`).join("") + `</div>`;
     }
     function enterDetail() {
       document.getElementById("page").classList.add("hidden");
@@ -917,8 +1144,31 @@
              venture record. Sections below may read as empty for fields this venture does have.
              Restart the webui to see the real values.
            </div>` : "";
-      d.innerHTML = backBar([{label:"← Portfolio",href:{}},{label:v.title}]) + staleBanner
-        + manifest.bands.map(b => renderBand(v, b, manifest, staleBackend)).join("");
+      const identity = ident(v.slug), colour = identity.colour || "#cba6f7";
+      const module = ["overview","work","evidence","agents","prompts"].includes(qs().get("module")) ? qs().get("module") : "overview";
+      const tabs = [
+        ["overview","Overview"],["work","Work"],["evidence","Evidence"],
+        ["agents","Agents"],["prompts","Prompts"]
+      ].map(([key,label]) => `<button type="button" class="venture-app-tab ${module===key?"active":""}"
+          style="--vc:${colour}" data-go='${esc(JSON.stringify({v:v.slug,module:key}))}'>${label}</button>`).join("");
+      const hero = `<div class="venture-app-hero"><span class="sigil">${esc(identity.emoji||"")}</span><div>
+          <h1 class="font-pixel text-sm" style="color:${colour}">${esc(v.title)}</h1>
+          <div class="text-subtext text-xs">VentureApp · ${esc(v.lifecycle)} · ${esc(v.priority)}</div>
+        </div></div><nav class="venture-app-tabs" aria-label="Venture application modules">${tabs}</nav>`;
+      const work = () => `<section>
+        <h2 class="font-pixel text-xs text-green mb-2">Projects (${(v.projects||[]).length})</h2>
+        ${(v.projects||[]).map(p=>`<article class="ui-card mb-2"><button type="button" class="venture-details-btn font-pixel" data-go='${esc(JSON.stringify({p:p.slug||p.id}))}'>${esc(p.title||p.slug||p.id)}</button><p class="text-xs text-subtext mt-2">${esc(p.objective||"")}</p></article>`).join("")||`<p class="text-subtext text-xs">No canonical projects are linked.</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Milestones (${(v.milestones||[]).length})</h2>
+        ${(v.milestones||[]).map(m=>`<article class="ui-card mb-2"><button type="button" class="venture-details-btn" data-go='${esc(JSON.stringify({v:v.slug,m:String(m.id||"")}))}'>${esc(m.title||m.id||"Untitled milestone")}</button><span class="text-subtext text-xs ml-1">${esc(m.status||m.date||"status unavailable")}</span></article>`).join("")||`<p class="text-subtext text-xs">No canonical milestones are linked.</p>`}
+        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks (${(v.tasks||[]).length})</h2>${taskList(v.tasks)}
+      </section>`;
+      const providerModule = (title, description, href) => `<section class="ui-card"><h2 class="font-pixel text-xs text-green mb-2">${esc(title)}</h2><p class="text-xs text-subtext mb-3">${esc(description)}</p><a class="venture-details-btn" href="${esc(href)}">Open owning app</a></section>`;
+      const content = module === "overview" ? manifest.bands.map(b => renderBand(v,b,manifest,staleBackend)).join("")
+        : module === "work" ? work()
+        : module === "evidence" ? providerModule("Evidence","Provider-backed meetings, transcripts, recordings, journals and knowledge relationships are the next integration slice.","/utterances/")
+        : module === "agents" ? providerModule("Agent Sessions","Ephemeral sessions are owned by claude-agents. Venture-role binding will appear here after the role assignment contract ships.","/agents/")
+        : providerModule("Prompts and Utterances","Reusable prompts remain owned by claude-prompts; conversational expressions and delivery evidence remain owned by claude-utterances.","/utterances/");
+      d.innerHTML = backBar([{label:"← Portfolio",href:{view:"portfolio"}},{label:v.title}]) + staleBanner + hero + content;
       wireGo(d);
     }
     async function renderProject(slug) {
@@ -947,8 +1197,14 @@
         <h2 class="font-pixel text-xs text-green mt-4 mb-2">Tasks</h2>${taskList(ms.tasks)}`;
       wireGo(d);
     }
-    document.getElementById("search").oninput = (e) => { state.q = e.target.value.toLowerCase(); renderGrid(); };
-    state.highlights = loadHL();
+    document.getElementById("search").oninput = (e) => {
+      state.q = e.target.value.toLowerCase();
+      state.portfolioBase = null;
+      state.portfolioBasePromise = null;
+      const u = new URL(location); state.q ? u.searchParams.set("q",state.q) : u.searchParams.delete("q");
+      history.replaceState({},"",u); loadPortfolioBase().then(payload => { renderGrid(payload); renderStats(payload); });
+    };
+    state.stars = loadStars();
     route();
   </script>
 </body>

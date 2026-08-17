@@ -153,6 +153,11 @@ def _cached_projects(ventures_root: Path | None) -> list[dict[str, Any]]:
     )
 
 
+def all_projects(ventures_root: Path | None = None) -> list[dict[str, Any]]:
+    """Return the cached project index for projection joins."""
+    return [dict(project) for project in _cached_projects(ventures_root)]
+
+
 def get(slug: str, ventures_root: Path | None = None) -> dict[str, Any] | None:
     if not slug or "/" in slug or "\\" in slug or slug.startswith(".") or ".." in slug:
         return None

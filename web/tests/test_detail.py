@@ -321,3 +321,17 @@ def test_accessor_cache_invalidates_on_mtime_change(tmp_path: Path, monkeypatch)
     out = acc.detail("beta")
     assert out["title"] == "Beta RENAMED"
     assert parse_calls["n"] == 4  # full re-parse pass of both files
+
+
+def test_inline_project_resolves_through_project_detail_route(tmp_path: Path):
+    vroot = tmp_path / "ventures"
+    (vroot / "active").mkdir(parents=True)
+    (vroot / "active" / "legion.md").write_text(
+        "---\nid: legion\ntitle: Legion\nprojects:\n"
+        "  - id: legion-platform\n    title: Legion Platform\n    objective: Build the substrate.\n---\n"
+    )
+    backlog = tmp_path / "backlog"; backlog.mkdir()
+    out = ventures_detail.project("legion-platform", ventures_root=vroot, backlog_dir=backlog)
+    assert out["venture"] == "legion"
+    assert out["title"] == "Legion Platform"
+    assert out["tasks"] == []

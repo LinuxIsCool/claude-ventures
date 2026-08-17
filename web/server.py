@@ -44,6 +44,12 @@ def build_kernel(
     from ventures_handler import VenturesKernel
     if data_root is None:
         data_root = Path.home() / ".claude" / "local" / "ventures"
+        # During the Legion brain migration this is not yet linked on every
+        # machine. Prefer the canonical brain store over silently serving an
+        # empty portfolio when the compatibility path is absent.
+        canonical = Path.home() / "legion-brain" / "local" / "ventures"
+        if not data_root.is_dir() and canonical.is_dir():
+            data_root = canonical
     if backlog_dir is None:
         backlog_dir = Path.home() / ".claude" / "local" / "backlog"
     accessor = VenturesAccessor(data_root=data_root)

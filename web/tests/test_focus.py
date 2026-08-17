@@ -1,194 +1,91 @@
-# plugins/claude-ventures/web/tests/test_focus.py
 from __future__ import annotations
 
-import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
+import sys
 
-HERE = Path(__file__).resolve().parent.parent  # web/
+HERE = Path(__file__).resolve().parent.parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-import ventures_focus  # noqa: E402
-from ventures_accessor import VenturesAccessor  # noqa: E402
-
-TODAY = date(2026, 6, 1)
-
-
-def _d(offset: int) -> str:
-    return (TODAY + timedelta(days=offset)).isoformat()
+import ventures_focus
+import ventures_tasks
+from ventures_scope import PortfolioScope
 
 
-def _mk_store(tmp_path: Path) -> tuple[Path, Path]:
-    """One active venture with five deadlines at offsets -5, 0, +3, +20, +90.
-    Each carries a parseable date and no done/reached exclusion, so the
-    -5 deadline is the ONLY overdue one (parity with stats overdue_total=1)."""
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    (vroot / "active" / "alpha.md").write_text(
-        "---\n"
-        "id: alpha\n"
-        "title: Alpha Venture\n"
-        "stage: active\n"
-        "priority: high\n"
-        "deadlines:\n"
-        f'  - date: "{_d(-5)}"\n    label: Past obligation\n    type: hard\n'
-        f'  - date: "{_d(0)}"\n    label: Due today\n    type: hard\n'
-        f'  - date: "{_d(3)}"\n    label: This week\n    type: hard\n'
-        f'  - date: "{_d(20)}"\n    label: Soon thing\n    type: hard\n'
-        f'  - date: "{_d(90)}"\n    label: Far future\n    type: hard\n'
-        "---\nbody\n"
-    )
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    return vroot, bl
+TODAY = date(2026, 8, 9)  # Sunday
 
 
-def test_deadline_bucketing_by_days(tmp_path: Path):
-    vroot, bl = _mk_store(tmp_path)
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    labels = lambda key: [i["title"] for i in out[key] if i["kind"] == "deadline"]
-    assert labels("attention") == ["Past obligation"]
-    assert labels("today") == ["Due today"]
-    assert labels("this_week") == ["This week"]
-    assert labels("soon") == ["Soon thing"]
-    # +90 is > 30 days out -> dropped from every bucket
-    all_titles = [i["title"] for key in out for i in out[key]]
-    assert "Far future" not in all_titles
+def _stores(tmp_path: Path) -> tuple[Path, Path]:
+    vr = tmp_path / "ventures"
+    for lifecycle in ("exploring", "active", "sustaining", "dormant", "harvesting"):
+        (vr / lifecycle).mkdir(parents=True)
+    for lifecycle, slug in (("active", "starred"), ("dormant", "sleeping"), ("active", "other")):
+        (vr / lifecycle / f"{slug}.md").write_text(f"---\nid: {slug}\ntitle: {slug}\n---\n")
+    bl = tmp_path / "backlog"; bl.mkdir()
+    rows = [
+        (1, "oldest", "2026-08-01", "high", "To Do", ""),
+        (2, "today", "2026-08-09", "medium", "To Do", ""),
+        (3, "overflow today", "2026-08-08", "critical", "To Do", ""),
+        (4, "soon one", "2026-08-10", "low", "To Do", ""),
+        (5, "soon two", "2026-08-15", "medium", "To Do", ""),
+        (6, "soon three", "2026-08-20", "high", "To Do", ""),
+        (7, "soon overflow", "2026-08-21", "high", "To Do", ""),
+        (8, "undated", "", "high", "To Do", ""),
+        (9, "blocked", "2026-08-09", "critical", "blocked", "x"),
+        (10, "closed", "2026-08-01", "high", "done", ""),
+    ]
+    for ident, title, due, priority, status, blocked in rows:
+        (bl / f"task-{ident}.md").write_text(
+            f"---\nid: {ident}\ntitle: {title}\nventure: starred\nstatus: {status}\npriority: {priority}\ndue: {due}\n"
+            + (f"blocked_by: [{blocked}]\n" if blocked else "") + "---\n")
+    (bl / "task-20.md").write_text("---\nid: 20\ntitle: other\nventure: other\nstatus: To Do\ndue: 2026-08-09\n---\n")
+    return vr, bl
 
 
-def test_deadline_days_field(tmp_path: Path):
-    vroot, bl = _mk_store(tmp_path)
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    by_title = {i["title"]: i for key in out for i in out[key]}
-    assert by_title["Past obligation"]["days"] == -5
-    assert by_title["Due today"]["days"] == 0
-    assert by_title["This week"]["days"] == 3
-    assert by_title["Soon thing"]["days"] == 20
+def test_empty_star_scope_is_intentionally_empty(tmp_path: Path):
+    vr, bl = _stores(tmp_path)
+    out = ventures_focus.buckets(vr, bl, TODAY, PortfolioScope(frozenset()))
+    assert all(out[key] == [] for key in ("today", "this_week", "soon", "backlog"))
+    assert out["scope"]["empty"] is True
 
 
-def test_deadline_ref_shape(tmp_path: Path):
-    vroot, bl = _mk_store(tmp_path)
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    dl = out["today"][0]
-    assert dl["kind"] == "deadline"
-    assert dl["venture"] == "alpha"
-    assert dl["ref"] == {"v": "alpha"}
-    assert dl["date"] == _d(0)
-    assert dl["priority"] == "high"
+def test_focus_caps_exact_grouping_and_task_links(tmp_path: Path):
+    vr, bl = _stores(tmp_path)
+    scope = PortfolioScope(frozenset({"starred"}))
+    out = ventures_focus.buckets(vr, bl, TODAY, scope)
+    assert [t["id"] for t in out["today"]] == ["1", "3"]
+    assert out["this_week"] == []  # today is Sunday
+    assert [t["id"] for t in out["soon"]] == ["4", "5", "6"]
+    assert {t["id"] for t in out["backlog"]} == {"2", "7", "8", "9"}
+    grouped = out["today"] + out["this_week"] + out["soon"] + out["backlog"]
+    assert len({t["id"] for t in grouped}) == len(grouped)
+    assert all(t["href"] == f"/backlog/tasks/{t['id']}" for t in grouped)
 
 
-def test_attention_parity_with_overdue_total(tmp_path: Path):
-    vroot, bl = _mk_store(tmp_path)
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    deadline_attention = [i for i in out["attention"] if i["kind"] == "deadline"]
-    overdue_total = VenturesAccessor(data_root=vroot, today=TODAY).stats()["overdue_total"]
-    assert len(deadline_attention) == overdue_total == 1
+def test_widgets_share_scope_and_overdue_semantics(tmp_path: Path):
+    vr, bl = _stores(tmp_path)
+    scope = PortfolioScope(frozenset({"starred"}))
+    active = ventures_tasks.widget(vr, bl, scope, TODAY, "active", True)
+    overdue = ventures_tasks.widget(vr, bl, scope, TODAY, "overdue", True)
+    assert active["count"] == 9
+    assert {t["id"] for t in overdue["records"]} == {"1", "3"}
 
 
-def test_overdue_exclusions_and_harvesting(tmp_path: Path):
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    (vroot / "harvesting").mkdir(parents=True)
-    (vroot / "active" / "gamma.md").write_text(
-        "---\nid: gamma\ntitle: Gamma\nstage: active\npriority: high\n"
-        "deadlines:\n"
-        f'  - date: "{_d(-10)}"\n    label: Real overdue\n    type: hard\n'
-        f'  - date: "{_d(-9)}"\n    label: Reached thing\n    type: milestone-reached\n'
-        f'  - date: "{_d(-8)}"\n    label: Done thing\n    status: complete\n'
-        "---\n"
-    )
-    # harvesting venture: its overdue deadline contributes NO attention item
-    (vroot / "harvesting" / "omega.md").write_text(
-        "---\nid: omega\ntitle: Omega\nstage: harvesting\npriority: high\n"
-        "deadlines:\n"
-        f'  - date: "{_d(-3)}"\n    label: Harvest overdue\n    type: hard\n'
-        "---\n"
-    )
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    att = [i["title"] for i in out["attention"] if i["kind"] == "deadline"]
-    assert att == ["Real overdue"]
-    overdue_total = VenturesAccessor(data_root=vroot, today=TODAY).stats()["overdue_total"]
-    assert len(att) == overdue_total == 1
+def test_lifecycle_filter_maps_display_groups(tmp_path: Path):
+    vr, bl = _stores(tmp_path)
+    assert PortfolioScope(frozenset({"sleeping"}), frozenset({"active"})).includes("sleeping", "dormant") is False
+    assert PortfolioScope(frozenset({"starred"}), frozenset({"active"})).includes("starred", "active") is True
 
 
-def test_milestones_dated_open_only(tmp_path: Path):
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    (vroot / "active" / "alpha.md").write_text(
-        "---\nid: alpha\ntitle: Alpha\nstage: active\npriority: medium\n"
-        "milestones:\n"
-        f'  - id: ms1\n    title: Open milestone\n    status: in_progress\n    date: "{_d(2)}"\n'
-        f'  - id: ms2\n    title: Done milestone\n    status: done\n    date: "{_d(4)}"\n'
-        f'  - id: ms3\n    title: Completed flag\n    completed: true\n    date: "{_d(5)}"\n'
-        "  - id: ms4\n    title: Undated\n    status: planned\n"
-        "---\n"
-    )
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    ms = [i for i in out["this_week"] if i["kind"] == "milestone"]
-    assert [i["title"] for i in ms] == ["Open milestone"]
-    assert ms[0]["ref"] == {"v": "alpha", "m": "ms1"}
-    assert ms[0]["days"] == 2
-
-
-def test_tasks_open_dated_venture_linked(tmp_path: Path):
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    (vroot / "active" / "alpha.md").write_text(
-        "---\nid: alpha\ntitle: Alpha\nstage: active\npriority: medium\n---\n"
-    )
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    # open + dated + venture-linked -> this_week
-    (bl / "task-1.md").write_text(
-        f'---\nid: 1\ntitle: Open task\nstatus: To Do\npriority: high\nventure: alpha\ndue: {_d(5)}\n---\n'
-    )
-    # closed -> excluded
-    (bl / "task-2.md").write_text(
-        f'---\nid: 2\ntitle: Done task\nstatus: done\npriority: high\nventure: alpha\ndue: {_d(5)}\n---\n'
-    )
-    # undated -> excluded
-    (bl / "task-3.md").write_text(
-        "---\nid: 3\ntitle: Undated task\nstatus: To Do\npriority: high\nventure: alpha\n---\n"
-    )
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    tasks = [i for i in out["this_week"] if i["kind"] == "task"]
-    assert [i["title"] for i in tasks] == ["Open task"]
-    t = tasks[0]
-    assert t["ref"] == {"task": "1", "v": "alpha"}
-    assert t["priority"] == "high"
-    assert t["days"] == 5
-
-
-def test_sort_within_buckets(tmp_path: Path):
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    (vroot / "active" / "alpha.md").write_text(
-        "---\nid: alpha\ntitle: Alpha\nstage: active\npriority: high\n"
-        "deadlines:\n"
-        f'  - date: "{_d(-2)}"\n    label: Less overdue\n    type: hard\n'
-        f'  - date: "{_d(-9)}"\n    label: Most overdue\n    type: hard\n'
-        f'  - date: "{_d(6)}"\n    label: Later week\n    type: hard\n'
-        f'  - date: "{_d(2)}"\n    label: Earlier week\n    type: hard\n'
-        "---\n"
-    )
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    # attention: most-overdue first (most negative days first)
-    assert [i["title"] for i in out["attention"]] == ["Most overdue", "Less overdue"]
-    # this_week: date ascending
-    assert [i["title"] for i in out["this_week"]] == ["Earlier week", "Later week"]
-
-
-def test_empty_store(tmp_path: Path):
-    vroot = tmp_path / "ventures"
-    (vroot / "active").mkdir(parents=True)
-    bl = tmp_path / "backlog"
-    bl.mkdir()
-    out = ventures_focus.buckets(vroot, bl, TODAY)
-    assert out == {"today": [], "this_week": [], "soon": [], "attention": []}
+def test_card_metrics_reconcile_with_focus_and_keep_overdue_warning(tmp_path: Path):
+    vr, bl = _stores(tmp_path)
+    metrics = ventures_tasks.card_metrics(vr, bl, TODAY)["ventures"]["starred"]
+    focus = ventures_focus.buckets(vr, bl, TODAY, PortfolioScope(frozenset({"starred"})))
+    assert metrics == {
+        "today": len(focus["today"]),
+        "this_week": len(focus["this_week"]),
+        "soon": len(focus["soon"]),
+        "backlog": len(focus["backlog"]),
+        "overdue": 2,
+    }

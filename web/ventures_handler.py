@@ -2,7 +2,8 @@
 """VenturesHandler + VenturesKernel: 3 detail routes over the read-only kernel."""
 from __future__ import annotations
 from datetime import date
-from urllib.parse import unquote, urlparse
+from threading import Thread
+from urllib.parse import parse_qs, unquote, urlparse
 
 from claude_webui import WebuiKernel
 from claude_webui.kernel import WebuiHandler
@@ -13,6 +14,9 @@ import ventures_focus
 import ventures_timeline
 import ventures_priorities
 import ventures_trends
+import ventures_tasks
+import ventures_portfolio
+from ventures_scope import PortfolioScope
 
 
 class VenturesHandler(WebuiHandler):
@@ -20,7 +24,9 @@ class VenturesHandler(WebuiHandler):
     backlog_dir = None
 
     def _dispatch_get(self) -> None:
-        path = unquote(urlparse(self.path).path)
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+        scope = PortfolioScope.from_query(parse_qs(parsed.query))
         vroot = self.ventures_root
         bl = self.backlog_dir
         try:
@@ -31,7 +37,17 @@ class VenturesHandler(WebuiHandler):
             if path == "/api/contract":
                 self._send_json(ventures_contract.report(vroot)); return
             if path == "/api/focus":
-                self._send_json(ventures_focus.buckets(vroot, bl, date.today())); return
+                self._send_json(ventures_focus.buckets(vroot, bl, date.today(), scope)); return
+            if path == "/api/tasks":
+                self._send_json({"scope": scope.as_dict(), "records": ventures_tasks.records(vroot, bl, scope, date.today())}); return
+            if path == "/api/card_metrics":
+                self._send_json(ventures_tasks.card_metrics(vroot, bl, date.today())); return
+            if path == "/api/portfolio":
+                self._send_json(ventures_portfolio.data_view(vroot, bl, date.today(), parse_qs(parsed.query))); return
+            if path in {"/api/widgets/active_tasks", "/api/widgets/active_tasks/records"}:
+                self._send_json(ventures_tasks.widget(vroot, bl, scope, date.today(), "active", path.endswith("/records"))); return
+            if path in {"/api/widgets/overdue_tasks", "/api/widgets/overdue_tasks/records"}:
+                self._send_json(ventures_tasks.widget(vroot, bl, scope, date.today(), "overdue", path.endswith("/records"))); return
             if path == "/api/timeline":
                 self._send_json(ventures_timeline.timeline(vroot, bl, date.today())); return
             if path == "/api/priorities":
@@ -56,6 +72,18 @@ class VenturesKernel(WebuiKernel):
         self._ventures_root = ventures_root
         self._backlog_dir = backlog_dir
         super().__init__(*args, **kwargs)
+        # Prime the filesystem-backed indexes while the Hub is mounting its
+        # satellites. The first human Portfolio request should never pay the
+        # full YAML corpus parse cost.
+        Thread(target=self._warm_portfolio, name="ventures-portfolio-warm", daemon=True).start()
+
+    def _warm_portfolio(self) -> None:
+        try:
+            ventures_portfolio.data_view(
+                self._ventures_root, self._backlog_dir, date.today(), {}
+            )
+        except Exception:
+            pass  # normal request handling retains the truthful error path
 
     def _make_handler_class(self) -> type[WebuiHandler]:
         accessor = self.accessor

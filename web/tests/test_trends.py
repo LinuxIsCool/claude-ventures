@@ -98,7 +98,6 @@ def test_name_lists_present_and_correct(tmp_path: Path):
     out = ventures_trends.trends(vroot, bl, today=date(2026, 6, 2), snapshot_path=snap)
     assert out["derivable"] == [
         "milestones_reached_cumulative",
-        "revenue_cumulative",
         "deadline_pressure",
     ]
     assert out["snapshot_based"] == [
@@ -112,12 +111,11 @@ def test_name_lists_present_and_correct(tmp_path: Path):
         assert name in out["series"]
 
 
-def test_revenue_cumulative_single_point(tmp_path: Path):
+def test_unavailable_revenue_series_is_not_invented(tmp_path: Path):
     vroot, bl = _mk_store(tmp_path)
     snap = tmp_path / "metrics" / "snapshots.jsonl"
     out = ventures_trends.trends(vroot, bl, today=date(2026, 6, 2), snapshot_path=snap)
-    rev = out["series"]["revenue_cumulative"]
-    assert rev == [{"date": "2026-06-02", "value": 51500.0}]
+    assert "revenue_cumulative" not in out["series"]
 
 
 def test_deadline_pressure_12_weeks(tmp_path: Path):

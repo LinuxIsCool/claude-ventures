@@ -7,10 +7,6 @@ DERIVABLE — computed directly from current venture data (no history needed):
   - milestones_reached_cumulative: cumulative count of COMPLETED milestones that
     carry a parseable date (`completed` date string or `date`), grouped by date,
     sorted ascending, with a running cumulative sum.
-  - revenue_cumulative: sum of `financial.revenue_to_date` across all ventures,
-    emitted as a SINGLE point at `today`. LIMITATION: invoices/revenue in the
-    store have no reliable per-date breakdown, so we cannot build a real revenue
-    timeline — only the current total at today. This is documented intentionally.
   - deadline_pressure: for the next 12 ISO weeks starting this week, the count of
     future (not-passed) deadlines whose date falls within each week. One point per
     week keyed by the week's Monday (ISO week start).
@@ -41,7 +37,6 @@ from ventures_accessor import VenturesAccessor
 
 _DERIVABLE = [
     "milestones_reached_cumulative",
-    "revenue_cumulative",
     "deadline_pressure",
 ]
 _SNAPSHOT_BASED = [
@@ -100,19 +95,6 @@ def _milestones_reached_cumulative(acc: VenturesAccessor) -> list[dict[str, Any]
     return series
 
 
-def _revenue_cumulative(acc: VenturesAccessor, today: date) -> list[dict[str, Any]]:
-    total = 0.0
-    for v in acc.list({}):
-        rec = acc.detail(v["slug"])
-        fin = rec.get("financial") or {}
-        if isinstance(fin, dict):
-            try:
-                total += float(fin.get("revenue_to_date") or 0)
-            except (TypeError, ValueError):
-                pass
-    return [{"date": today.isoformat(), "value": total}]
-
-
 def _deadline_pressure(acc: VenturesAccessor, today: date) -> list[dict[str, Any]]:
     # 12 ISO weeks starting this week (Monday of the current week).
     week_start = today - timedelta(days=today.weekday())
@@ -162,7 +144,6 @@ def trends(ventures_root, backlog_dir, today: date, snapshot_path=None) -> dict:
 
     series: dict[str, Any] = {
         "milestones_reached_cumulative": _milestones_reached_cumulative(acc),
-        "revenue_cumulative": _revenue_cumulative(acc, today),
         "deadline_pressure": _deadline_pressure(acc, today),
         "tasks_open": [
             {"date": r["date"], "value": r.get("tasks_open", 0)}

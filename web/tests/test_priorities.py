@@ -50,7 +50,7 @@ def test_score_parts_sum_to_score(tmp_path: Path):
     for it in out["items"]:
         parts = it["score_parts"]
         assert (
-            parts["urgency"] + parts["manual"] + parts["stage"] + parts["financial"]
+            parts["urgency"] + parts["manual"] + parts["stage"]
             == it["score"]
         ), it
 
@@ -62,13 +62,14 @@ def test_overdue_critical_active_revenue_outranks_far_low_dormant(tmp_path: Path
     assert "Overdue critical" in titles
     assert "Far low" in titles
     assert titles.index("Overdue critical") < titles.index("Far low")
-    # explicit score sanity: overdue critical active+revenue = 50+30+10+10
+    # explicit score sanity: overdue critical active = 50+30+10
     crit = next(it for it in out["items"] if it["title"] == "Overdue critical")
-    assert crit["score"] == 100
+    assert crit["score"] == 90
     far = next(it for it in out["items"] if it["title"] == "Far low")
     # +20 days urgency = round(45*(1-20/30)) = 15; low=4; dormant=2; no rev=0
-    assert far["score_parts"] == {"urgency": 15, "manual": 4, "stage": 2, "financial": 0}
+    assert far["score_parts"] == {"urgency": 15, "manual": 4, "stage": 2}
     assert far["score"] == 21
+    assert out["signals_available"]["financial"] is False
 
 
 def test_completed_tasks_excluded(tmp_path: Path):

@@ -56,7 +56,12 @@ def _serve(tmp_path: Path) -> int:
 
 
 _EXPECTED_KEYS = {
-    "/api/focus": {"today", "this_week", "soon", "attention"},
+    "/api/focus?ventures=bcrg": {"today", "this_week", "soon", "backlog", "scope"},
+    "/api/tasks?ventures=bcrg": {"records", "scope"},
+    "/api/card_metrics": {"as_of", "ventures"},
+    "/api/portfolio": {"records", "schema", "page", "query", "as_of"},
+    "/api/widgets/active_tasks?ventures=bcrg": {"count", "scope", "kind"},
+    "/api/widgets/overdue_tasks/records?ventures=bcrg": {"count", "records", "scope", "kind"},
     "/api/timeline": {"lanes", "range"},
     "/api/priorities": {"items"},
     "/api/trends": {"series", "derivable", "snapshot_based"},
