@@ -4,6 +4,11 @@ from pathlib import Path
 INDEX = (Path(__file__).resolve().parent.parent / "static" / "index.html").read_text()
 
 
+def test_shared_font_asset_uses_kernel_path():
+    assert 'href="static/fonts/fonts.css"' in INDEX
+    assert 'href="static/fonts.css"' not in INDEX
+
+
 def test_card_click_selects_while_details_is_explicit_action():
     assert "toggleSelected(el.dataset.slug)" in INDEX
     assert 'data-details="${esc(i.slug)}"' in INDEX
