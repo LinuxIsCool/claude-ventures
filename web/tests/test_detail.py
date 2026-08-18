@@ -182,7 +182,7 @@ def test_detail_routes_served(tmp_path: Path):
 
 
 def test_real_venture_detail_task_parity():
-    import subprocess
+    import yaml
     vroot = Path.home()/".claude"/"local"/"ventures"
     if not (vroot/"active").is_dir():
         import pytest; pytest.skip("no real store")
@@ -190,8 +190,17 @@ def test_real_venture_detail_task_parity():
     if d.get("error"):
         import pytest; pytest.skip("bcrg absent")
     bl = Path.home()/".claude"/"local"/"backlog"
-    grep = subprocess.run(["bash","-c", f"grep -lE '^venture: bcrg$' {bl}/*.md 2>/dev/null | wc -l"], capture_output=True, text=True)
-    venture_field_count = int(grep.stdout.strip() or 0)
+    venture_field_count = 0
+    for task_path in bl.glob("*.md"):
+        text = task_path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            continue
+        try:
+            frontmatter = yaml.safe_load(text.split("---", 2)[1]) or {}
+        except yaml.YAMLError:
+            continue
+        if frontmatter.get("venture") == "bcrg":
+            venture_field_count += 1
     assert len(d["tasks"]) >= venture_field_count
 
 
