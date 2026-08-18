@@ -99,8 +99,6 @@
   .filter-option { display:flex; align-items:center; gap:8px; padding:5px; cursor:pointer; font-size:.68rem; }
   .filter-option .count { margin-left:auto; color:#6c7086; }
   .work-select { appearance:none; padding-right:24px; cursor:pointer; }
-  .selection-bar { display:flex; align-items:center; gap:8px; padding:7px 9px; margin-bottom:10px;
-                   border:1px solid #89b4fa66; border-radius:7px; background:#18202d; font-size:.7rem; }
   .nav-link.active { background:#1e1e30; color:#cba6f7; }
   .chip { padding:2px 8px; border:1px solid #45475a; border-radius:12px; cursor:pointer;
           font-size:0.7rem; color:#bac2de; transition:all 0.15s ease; }
@@ -129,7 +127,6 @@
       <div id="portfolio-cols" class="flex gap-4 items-start">
         <div class="flex-1 min-w-0">
           <div id="lifecycle-chips" class="portfolio-toolbar mb-3"></div>
-          <div id="selection-bar"></div>
           <div id="grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
           <div id="scoped-tasks" class="mt-4"></div>
         </div>
@@ -238,7 +235,11 @@
     }
     async function loadIdentity() { try { state.identity = await api("static/venture-identity.json"); } catch (e) { state.identity = {}; } }
     function ident(slug) { return state.identity[slug] || {}; }
-    function redrawSelection() { renderGrid(); renderSelectionBar(); renderFocusRail(); renderStats(); renderScopedTasks(); }
+    document.addEventListener("keydown", e => {
+      // The visible clear control is gone; Escape is the way out of a selection.
+      if (e.key === "Escape" && state.selected.size) { state.selected.clear(); redrawSelection(); }
+    });
+    function redrawSelection() { renderGrid(); renderFocusRail(); renderStats(); renderScopedTasks(); }
     function toggleSelected(slug) {
       state.selected.has(slug) ? state.selected.delete(slug) : state.selected.add(slug);
       redrawSelection();
@@ -248,17 +249,6 @@
       state.portfolioBase = null;
       state.portfolioBasePromise = null;
       saveStars(); redrawSelection();
-    }
-    function renderSelectionBar() {
-      const host = document.getElementById("selection-bar");
-      if (!state.selected.size) { host.innerHTML = ""; return; }
-      const visible = state.ventures.filter(v => state.selected.has(v.slug)).length;
-      const label = visible === state.selected.size ? `${state.selected.size} selected` : `${visible} of ${state.selected.size} selected visible`;
-      host.innerHTML = `<div class="selection-bar"><strong>${label}</strong><span style="flex:1"></span>
-        <button type="button" class="toolbar-action" data-open-selected>Open selected</button>
-        <button type="button" class="toolbar-action" data-clear-selected>Clear selection</button></div>`;
-      host.querySelector("[data-open-selected]").onclick = () => renderVentureSet("Selected", [...state.selected]);
-      host.querySelector("[data-clear-selected]").onclick = () => { state.selected.clear(); redrawSelection(); };
     }
     async function renderStats(facetPayload=null) {
       facetPayload = facetPayload || await loadPortfolioBase();
@@ -365,7 +355,6 @@
       const payload = await loadPortfolioBase();
       renderStats(payload);
       await renderGrid(payload);
-      renderSelectionBar();
       renderFocusRail();
       renderScopedTasks();
     }

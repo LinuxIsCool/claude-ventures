@@ -21,11 +21,21 @@ def test_stars_and_selection_are_independent():
     assert 'p.set("scope", state.scope)' in INDEX
 
 
-def test_set_detail_actions_are_contextual():
-    assert 'data-open-selected' in INDEX
-    assert 'data-clear-selected' in INDEX
+def test_no_selection_toolbar_competes_with_the_scoped_views():
+    """Selection is shown by the outline, the rail and the task table.
+
+    A bar restating "N selected" duplicates all three, so it is gone; the
+    count now reads off the task table's own header.
+    """
+    assert 'data-open-selected' not in INDEX
+    assert 'data-clear-selected' not in INDEX
+    assert 'id="selection-bar"' not in INDEX
     assert "Open stars" not in INDEX
-    assert "async function renderVentureSet(label, slugs)" in INDEX
+
+
+def test_escape_clears_the_selection_without_a_visible_control():
+    assert 'e.key === "Escape"' in INDEX
+    assert "state.selected.clear()" in INDEX
 
 
 def test_card_and_star_expose_separate_pressed_state():
