@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -107,6 +108,15 @@ def main() -> int:
         else:
             existing.append(str(milestone_path))
 
+    revision_path = args.ventures_root / ".portfolio_revision"
+    revision_updated = False
+    if args.apply and (created or not revision_path.exists()):
+        revision_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_revision = revision_path.with_name(f".{revision_path.name}.{os.getpid()}.tmp")
+        temp_revision.write_text(f"{now}\n", encoding="utf-8")
+        os.replace(temp_revision, revision_path)
+        revision_updated = True
+
     result = {
         "mode": "apply" if args.apply else "dry-run",
         "plugins": len(planned),
@@ -114,6 +124,8 @@ def main() -> int:
         "missing_milestones": sum(row["milestone_missing"] for row in planned),
         "created": created,
         "existing": existing,
+        "revision": str(revision_path),
+        "revision_updated": revision_updated,
         "plan": planned,
     }
     print(json.dumps(result, indent=2))
