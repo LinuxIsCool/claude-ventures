@@ -73,10 +73,14 @@ def test_fts_query_and_sanitising(tmp_path: Path):
     p = _db(tmp_path)
     doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q="grafana")
     assert [m["id"] for m in doc["items"]] == ["m2"] and doc["fts"] is True
-    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q='poster "unbalanced')
+    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q='"poster')
     assert [m["id"] for m in doc["items"]] == ["m1"]
     doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q="nothing-here-xyz")
     assert doc["items"] == [] and doc["count"] == 0
+    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q="poster grafana")
+    assert doc["items"] == []
+    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q="capstone poster")
+    assert [m["id"] for m in doc["items"]] == ["m1"]
 
 
 def test_like_fallback_when_fts_missing(tmp_path: Path):

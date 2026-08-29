@@ -35,8 +35,11 @@ def _slugs(raw: Any) -> list[str]:
 
 
 def _fts_query(q: str) -> str:
+    """Quote each token so operators and stray quotes in user input are
+    literal, then space-join them: FTS5 MATCH treats space-joined tokens as
+    an implicit AND, so a multi-word search narrows rather than broadens."""
     tokens = [t.replace('"', "") for t in q.split()]
-    return " OR ".join(f'"{t}"' for t in tokens if t)
+    return " ".join(f'"{t}"' for t in tokens if t)
 
 
 def _search_rowids(conn: sqlite3.Connection, q: str) -> tuple[set[int] | None, bool]:
