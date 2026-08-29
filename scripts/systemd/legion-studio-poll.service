@@ -1,0 +1,9 @@
+[Unit]
+Description=Venture Studio live-state poller (one pass)
+Documentation=file:///home/shawn/.local/opt/legion-plugins-main/plugins/claude-ventures/web/studio_poll.py
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/shawn/.local/opt/legion-plugins-main/plugins/claude-ventures/web
+ExecStart=/home/shawn/.local/opt/legion-webui-venv/bin/python /home/shawn/.local/opt/legion-plugins-main/plugins/claude-ventures/web/studio_poll.py --once
+TimeoutStartSec=90

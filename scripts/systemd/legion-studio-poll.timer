@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Venture Studio poller every minute
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=60
+Persistent=true
+AccuracySec=5
+
+[Install]
+WantedBy=timers.target
