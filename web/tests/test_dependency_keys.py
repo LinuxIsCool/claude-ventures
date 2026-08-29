@@ -94,3 +94,13 @@ def test_milestone_and_parent_task_are_emitted(tmp_path: Path):
     assert rows["1"]["milestone"] == "ms-week4"
     assert rows["1"]["parent_task"] == "9"
     assert rows["2"]["milestone"] == "" and rows["2"]["parent_task"] == ""
+
+
+def test_milestone_and_parent_task_tolerate_scalar_shapes(tmp_path: Path):
+    bl = tmp_path / "backlog"; bl.mkdir()
+    _task(bl, 1, "milestone: 2\nparent_task: [3]\n")
+    _task(bl, 2, "parent_task: 5\n")
+    rows = {r["id"]: r for r in ventures_backlog._all_tasks(bl)}
+    assert rows["1"]["milestone"] == "2"
+    assert rows["1"]["parent_task"] == "3"
+    assert rows["2"]["parent_task"] == "5"
