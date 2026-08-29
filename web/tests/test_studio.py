@@ -140,3 +140,18 @@ def test_venture_slugged_studio_still_gets_detail(tmp_path: Path):
     assert r.status == 200
     body = json.loads(r.read())
     assert body["counts"]["apps"] == 0
+
+
+def test_network_route(tmp_path: Path):
+    vroot, bl = _store(tmp_path)
+    (bl / "task-1.md").write_text("---\nid: 1\ntitle: a\nventure: acme\nstatus: To Do\n---\n")
+    (bl / "task-2.md").write_text("---\nid: 2\ntitle: b\nventure: acme\nstatus: done\ndepends_on: [1]\n---\n")
+    port = _serve(vroot, bl)
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", "/api/venture/acme/network"); r = c.getresponse()
+    assert r.status == 200
+    body = json.loads(r.read())
+    assert {n["id"] for n in body["nodes"]} == {"1"}
+    c.request("GET", "/api/venture/acme/network?done=1"); r = c.getresponse()
+    body = json.loads(r.read())
+    assert {n["id"] for n in body["nodes"]} == {"1", "2"} and body["counts"]["edges"] == 1
