@@ -1,5 +1,5 @@
 # web/ventures_handler.py
-"""VenturesHandler + VenturesKernel: 3 detail routes over the read-only kernel."""
+"""VenturesHandler + VenturesKernel: 4 detail routes over the read-only kernel."""
 from __future__ import annotations
 from datetime import date
 from threading import Thread
@@ -16,6 +16,7 @@ import ventures_priorities
 import ventures_trends
 import ventures_tasks
 import ventures_portfolio
+import ventures_studio
 from ventures_scope import PortfolioScope
 
 
@@ -54,6 +55,9 @@ class VenturesHandler(WebuiHandler):
                 self._send_json(ventures_priorities.ranked(vroot, bl, date.today())); return
             if path == "/api/trends":
                 self._send_json(ventures_trends.trends(vroot, bl, date.today())); return
+            if path.startswith("/api/venture/") and path.endswith("/studio"):
+                slug = path[len("/api/venture/"):-len("/studio")]
+                self._send_json(ventures_studio.studio(slug, ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/venture/"):
                 self._send_json(ventures_detail.venture(path[len("/api/venture/"):], ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/project/"):
