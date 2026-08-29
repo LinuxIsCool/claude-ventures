@@ -84,6 +84,8 @@ def _all_tasks(d: Path) -> list[dict[str, Any]]:
             "venture_resolution": resolution.as_dict(),
             "program": fm.get("program") or resolution.program,
             "project": fm.get("project") or resolution.project,
+            "milestone": str(fm.get("milestone") or ""),
+            "parent_task": (_ids(fm.get("parent_task")) or [""])[0],
             "due": str(fm.get("due") or ""),
             # Schema keys are depends_on / blocks (claude_backlog.schema).
             # blocked_by and dependencies are legacy spellings still in the corpus.

@@ -84,3 +84,13 @@ def test_mapping_value_is_skipped_without_raising(tmp_path: Path):
     _task(bl, 1, "depends_on: {a: 1}\n")
     rows = ventures_backlog._all_tasks(bl)
     assert rows[0]["depends_on"] == []
+
+
+def test_milestone_and_parent_task_are_emitted(tmp_path: Path):
+    bl = tmp_path / "backlog"; bl.mkdir()
+    _task(bl, 1, "milestone: ms-week4\nparent_task: task-9\n")
+    _task(bl, 2)
+    rows = {r["id"]: r for r in ventures_backlog._all_tasks(bl)}
+    assert rows["1"]["milestone"] == "ms-week4"
+    assert rows["1"]["parent_task"] == "9"
+    assert rows["2"]["milestone"] == "" and rows["2"]["parent_task"] == ""
