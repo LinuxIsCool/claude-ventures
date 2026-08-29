@@ -1,6 +1,8 @@
 from __future__ import annotations
 import json
+import threading
 from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import sys
 
@@ -57,6 +59,36 @@ def test_probe_http_sends_host_header():
         seen.update(headers); return (200, b"")
     P.probe_http("http://127.0.0.1:8888/", "fast-site.local.legion.localhost", fetch)
     assert seen["Host"] == "fast-site.local.legion.localhost"
+
+
+def test_default_fetch_does_not_follow_redirects():
+    class RedirectingHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/r":
+                self.send_response(302)
+                self.send_header("Location", "/elsewhere")
+                self.end_headers()
+            elif self.path == "/elsewhere":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"ok")
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, fmt, *args):  # noqa: A003 -- quiet the test run
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), RedirectingHandler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, _body = P.default_fetch(f"http://127.0.0.1:{port}/r", {}, 5)
+        assert status == 302
+    finally:
+        server.shutdown()
+        thread.join()
 
 
 def test_containers_for_parses_docker_output():

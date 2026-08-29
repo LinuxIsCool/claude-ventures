@@ -39,10 +39,22 @@ FLEET_DEFAULT = Path.home() / ".claude" / "local" / "fleet" / "webui-registry.js
 
 # ---- default I/O seams ------------------------------------------------------
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# Probes never follow redirects: a caller-supplied Host header would otherwise
+# ride along onto the redirected request (urllib's default opener carries it
+# across hosts), and a redirecting health endpoint should be reported as its
+# 3xx rather than silently resolved to whatever it points at.
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirect())
+
+
 def default_fetch(url: str, headers: dict[str, str], timeout: float) -> tuple[int, bytes]:
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _NO_REDIRECT_OPENER.open(req, timeout=timeout) as resp:
             return resp.status, resp.read(65536)
     except urllib.error.HTTPError as exc:  # any HTTP status is an answer, not a failure
         return exc.code, exc.read(65536) if hasattr(exc, "read") else b""

@@ -35,4 +35,5 @@ def test_studio_module_defines_mount_and_sections():
         assert needle in js
     for needle in ("snapshot", "liveBadge(", "certBadge(", "containerChips(", "data-snapshot-age"):
         assert needle in js
+    assert "Number.isNaN(t)" in js  # a malformed ISO string renders "", never "NaNh ago"
     assert "—" not in js  # no em-dashes in copy

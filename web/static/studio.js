@@ -241,8 +241,9 @@
 
   // ---- live badges from the poller snapshot --------------------------------
   function ageText(iso, nowMs) {
-    if (!iso) return "";
-    const s = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
+    const t = Date.parse(iso);
+    if (!iso || Number.isNaN(t)) return "";
+    const s = Math.max(0, Math.round((nowMs - t) / 1000));
     return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
   }
   function liveBadge(esc, live, stale, nowMs) {
