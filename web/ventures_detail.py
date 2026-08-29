@@ -20,6 +20,11 @@ def _venture_record(slug: str, ventures_root: Path | None):
     return None
 
 
+def venture_record(slug: str, ventures_root: Path | None = None):
+    """Public alias of `_venture_record` for other modules to call."""
+    return _venture_record(slug, ventures_root)
+
+
 def venture(slug: str, ventures_root: Path | None = None, backlog_dir: Path | None = None) -> dict[str, Any]:
     v = _venture_record(slug, ventures_root)
     if v is None:

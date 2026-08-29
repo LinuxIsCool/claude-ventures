@@ -45,7 +45,7 @@ def _domains(apps: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def studio(slug: str, ventures_root: Path | None = None, backlog_dir: Path | None = None) -> dict[str, Any]:
-    v = ventures_detail._venture_record(slug, ventures_root)
+    v = ventures_detail.venture_record(slug, ventures_root)
     if v is None:
         return {"error": "not found", "slug": slug}
     apps = []

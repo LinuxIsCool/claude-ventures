@@ -71,3 +71,32 @@ def test_cache_hits_until_signature_changes(tmp_path: Path, monkeypatch):
     (r / "c.txt").write_text("c\n")  # changes the root dir mtime
     ventures_git.repo_state(str(r))
     assert calls["n"] == 2
+
+
+def test_linked_worktree_signature_invalidates_on_commit(tmp_path: Path):
+    # A linked worktree's `.git` is a FILE (`gitdir: <path>`), not a
+    # directory, so the plain `git.is_dir()` branch in _signature() never
+    # picks up its HEAD/index/logs-HEAD. Neither the worktree root nor the
+    # `.git` file itself changes mtime on commit, so a cache built once for
+    # a worktree path would never invalidate.
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x", "HOME": str(tmp_path)}
+    r = _repo(tmp_path)
+    wt = tmp_path / "wt"
+    subprocess.run(["git", "worktree", "add", str(wt), "-b", "wt-branch"], cwd=r, check=True, env=env)
+    ventures_git._CACHE.clear()
+
+    s1 = ventures_git.repo_state(str(wt))
+    assert s1["ok"] is True
+    assert s1["branch"] == "wt-branch"
+
+    (wt / "a.txt").write_text("changed\n")
+    # Pin the commit date away from "now" (rather than relying on real-clock
+    # separation from the first commit, which can land in the same second
+    # and make last_commit compare equal by coincidence, not by bug).
+    second_env = {**env, "GIT_AUTHOR_DATE": "2020-01-01T00:00:01+00:00", "GIT_COMMITTER_DATE": "2020-01-01T00:00:01+00:00"}
+    subprocess.run(["git", "-C", str(wt), "commit", "-am", "second"], check=True, env=second_env)
+
+    # No _CACHE.clear() here: the cache must invalidate on its own.
+    s2 = ventures_git.repo_state(str(wt))
+    assert s2["head"] != s1["head"]
+    assert s2["last_commit"] != s1["last_commit"]

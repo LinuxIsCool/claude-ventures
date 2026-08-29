@@ -28,11 +28,35 @@ def _git(path: Path, *args: str) -> str:
     return out.stdout.strip()
 
 
+def _linked_worktree_gitdir(path: Path, git_file: Path) -> Path | None:
+    # A linked worktree's `.git` is a FILE containing `gitdir: <path>`,
+    # pointing at the per-worktree gitdir (HEAD/index/logs-HEAD live there,
+    # not under this `.git` file). Unreadable or malformed content is not
+    # this function's problem to raise on; the caller just gets nothing to
+    # add to the signature.
+    try:
+        first_line = git_file.read_text().splitlines()[0]
+    except (OSError, IndexError):
+        return None
+    prefix = "gitdir:"
+    if not first_line.startswith(prefix):
+        return None
+    raw = first_line[len(prefix):].strip()
+    if not raw:
+        return None
+    gitdir = Path(raw)
+    return gitdir if gitdir.is_absolute() else path / gitdir
+
+
 def _signature(path: Path) -> tuple:
     git = path / ".git"
     candidates = [path, git]
     if git.is_dir():
         candidates += [git / "HEAD", git / "index", git / "logs" / "HEAD"]
+    elif git.is_file():
+        gitdir = _linked_worktree_gitdir(path, git)
+        if gitdir is not None:
+            candidates += [gitdir / "HEAD", gitdir / "index", gitdir / "logs" / "HEAD"]
     return ventures_cache.mtime_signature(candidates)
 
 
