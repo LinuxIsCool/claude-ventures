@@ -2,8 +2,9 @@
 """Compose the per-venture Studio document: app library plus domains.
 
 One JSON document per venture, built from declared data (app manifests) and
-cheap cached git reads. No network calls; live health arrives in a later
-phase as a poller snapshot. Spec: backlog task-824 sections 6.2 and 6.6.
+cheap cached git reads, merged with the live-state snapshot the poller wrote
+to disk. The composer itself makes no network calls of its own; it only reads
+that poller-written snapshot file. Spec: backlog task-824 sections 6.2 and 6.6.
 """
 from __future__ import annotations
 from pathlib import Path

@@ -21,20 +21,21 @@
     return `<span class="text-blue">${esc(g.branch)}</span> @ <code>${esc(g.head)}</code> · ${dirty}${wt}${when} · ${esc(g.vcs)}`;
   }
 
-  function envRows(esc, envs) {
+  function envRows(esc, envs, opts) {
     if (!envs.length) return `<p class="text-subtext text-xs">no environments declared</p>`;
-    return `<table class="studio-table text-xs"><thead><tr><th>env</th><th>url</th><th>host</th><th>deploy</th><th>status</th><th>control</th></tr></thead><tbody>` +
+    return `<table class="studio-table text-xs"><thead><tr><th>env</th><th>url</th><th>host</th><th>deploy</th><th>status</th><th>live</th><th>control</th></tr></thead><tbody>` +
       envs.map(e => `<tr>
         <td>${esc(e.name)}</td>
         <td>${e.url ? `<a class="text-blue" href="${esc(safeHref(e.url))}" target="_blank" rel="noopener">${esc(e.url)}</a>` : `<span class="text-subtext">none</span>`}</td>
         <td>${esc(e.host || "")}</td>
         <td>${esc(e.deploy || "")}</td>
         <td>${badge(esc, e.status || "declared")}</td>
+        <td>${liveBadge(esc, e.live, opts.stale, opts.nowMs)}</td>
         <td>${e.controllable ? badge(esc, "controllable", "text-green") : `<span class="text-subtext">read only</span>`}</td>
       </tr>`).join("") + `</tbody></table>`;
   }
 
-  function appCard(esc, a) {
+  function appCard(esc, a, opts) {
     const repo = a.repo || {};
     const remote = repo.remote ? `<a class="text-blue" href="${esc(safeHref(remoteHref(repo.remote)))}" target="_blank" rel="noopener">${esc(repo.remote)}</a>` : "";
     const deps = (a.depends_on || []).map(d => badge(esc, d)).join(" ");
@@ -50,7 +51,8 @@
       <div class="text-xs mt-1">${gitLine(esc, a.git)}</div>
       ${a.run ? `<div class="text-xs mt-1 text-subtext">run: <code>${esc(a.run)}</code>${a.test ? ` · test: <code>${esc(a.test)}</code>` : ""}</div>` : ""}
       ${a.status_doc ? `<div class="text-xs text-subtext">status doc: <code>${esc(a.status_doc)}</code></div>` : ""}
-      <div class="mt-2">${envRows(esc, a.environments || [])}</div>
+      <div class="mt-2">${envRows(esc, a.environments || [], opts)}</div>
+      ${containerChips(esc, a.live)}
       ${deps ? `<div class="text-xs mt-2">depends on ${deps}</div>` : ""}
       ${runtime}
       ${a.notes ? `<p class="text-xs text-subtext mt-2">${esc(a.notes)}</p>` : ""}
@@ -59,11 +61,12 @@
 
   function domainRows(esc, domains) {
     if (!domains.length) return `<p class="text-subtext text-xs">no domains declared; add environments[].url to an app manifest</p>`;
-    return `<table class="studio-table text-xs"><thead><tr><th>host</th><th>app</th><th>env</th><th>status</th><th>control</th></tr></thead><tbody>` +
+    return `<table class="studio-table text-xs"><thead><tr><th>host</th><th>app</th><th>env</th><th>status</th><th>cert</th><th>control</th></tr></thead><tbody>` +
       domains.map(d => `<tr>
         <td><a class="text-blue" href="${esc(safeHref(d.url))}" target="_blank" rel="noopener">${esc(d.host)}</a></td>
         <td>${esc(d.app)}</td><td>${esc(d.env)}</td>
         <td>${badge(esc, d.status)}</td>
+        <td>${certBadge(esc, d.cert)}</td>
         <td>${d.controllable ? badge(esc, "controllable", "text-green") : `<span class="text-subtext">read only</span>`}</td>
       </tr>`).join("") + `</tbody></table>`;
   }
@@ -236,6 +239,35 @@
     await paint();
   }
 
+  // ---- live badges from the poller snapshot --------------------------------
+  function ageText(iso, nowMs) {
+    if (!iso) return "";
+    const s = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
+    return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+  }
+  function liveBadge(esc, live, stale, nowMs) {
+    if (!live) return `<span class="text-subtext">no probe</span>`;
+    const tone = live.ok ? (live.decided_by === "gated" ? "text-blue" : "text-green") : "text-yellow";
+    const label = live.ok ? (live.decided_by === "gated" ? "gated" : "up") : (live.decided_by === "error" ? "down" : `http ${live.status}`);
+    const title = `${live.probe || ""} · ${live.decided_by} · ${live.elapsed_ms} ms${live.error ? " · " + live.error : ""}`;
+    return `<span class="badge ${tone} ${stale ? "studio-stale" : ""}" title="${esc(title)}">${esc(label)}${live.status && live.decided_by !== "error" ? ` ${esc(live.status)}` : ""}</span> <span class="text-subtext">${esc(ageText(live.checked_at, nowMs))}${stale ? " · stale" : ""}</span>`;
+  }
+  function certBadge(esc, cert) {
+    if (!cert) return `<span class="text-subtext">http</span>`;
+    if (cert.error) return `<span class="badge text-yellow" title="${esc(cert.error)}">cert ?</span>`;
+    const tone = cert.days_left < 14 ? "text-yellow" : "text-green";
+    return `<span class="badge ${tone}" title="${esc(cert.not_after || "")}">${esc(cert.days_left)}d</span>`;
+  }
+  function containerChips(esc, live) {
+    if (!live) return "";
+    if (live.containers_error) return `<div class="text-xs text-yellow mt-1">containers: ${esc(live.containers_error)}</div>`;
+    if (!live.containers.length) return `<div class="text-xs text-subtext mt-1">no containers carry this app's legion labels</div>`;
+    return `<div class="text-xs mt-1 studio-live">` + live.containers.map(c => {
+      const tone = c.state === "running" ? (c.health === "unhealthy" ? "text-yellow" : "text-green") : "text-subtext";
+      return `<span class="badge ${tone}" title="${esc(c.status || "")}">${esc(c.name)}${c.env ? ` · ${esc(c.env)}` : ""} · ${esc(c.state)}${c.health && c.health !== "none" ? ` · ${esc(c.health)}` : ""}</span>`;
+    }).join(" ") + `</div>`;
+  }
+
   async function mount(root, slug, helpers) {
     const { api, esc } = helpers;
     root.innerHTML = `<p class="text-subtext text-xs">loading studio…</p>`;
@@ -245,18 +277,20 @@
     if (doc.error) { root.innerHTML = `<p class="text-xs text-yellow">studio: ${esc(doc.error)}</p>`; return; }
     const errors = (doc.errors || []).length
       ? `<p class="text-xs text-yellow mb-2">skipped unreadable manifests: ${doc.errors.map(esc).join(", ")}</p>` : "";
+    const nowMs = Date.now();
+    const stale = doc.snapshot.stale;
+    const opts = { stale, nowMs };
     root.innerHTML = `<div class="studio-grid">
       <section>
         <h2 class="font-pixel text-xs text-green mb-2">Library (${esc(doc.counts.apps)})</h2>
+        <div class="text-xs text-subtext mb-2" data-snapshot-age>${doc.snapshot.present ? `live snapshot ${esc(ageText(doc.snapshot.generated_at, nowMs))}${stale ? " (stale)" : ""}` : "no live snapshot yet: the poller has not run"}</div>
         ${errors}
-        ${doc.apps.length ? doc.apps.map(a => appCard(esc, a)).join("")
+        ${doc.apps.length ? doc.apps.map(a => appCard(esc, a, opts)).join("")
           : `<p class="text-subtext text-xs">no apps yet; create one with the app_create MCP tool</p>`}
       </section>
       <section>
         <h2 class="font-pixel text-xs text-green mb-2">Domains (${esc(doc.counts.domains)})</h2>
         ${domainRows(esc, doc.domains)}
-        <h2 class="font-pixel text-xs text-green mt-4 mb-2">Coming</h2>
-        <p class="text-xs text-subtext">Live health lands in a later phase.</p>
       </section>
       </div>
       <section class="mt-4"><h2 class="font-pixel text-xs text-green mb-2">Meetings</h2><div data-meetings></div></section>

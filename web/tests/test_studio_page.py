@@ -18,6 +18,7 @@ def test_index_wires_studio_tab():
     assert '.studio-grid' in html and '.studio-table' in html
     assert '.studio-network' in html
     assert '.studio-meetings' in html
+    assert '.studio-live' in html
 
 
 def test_studio_module_defines_mount_and_sections():
@@ -31,5 +32,7 @@ def test_studio_module_defines_mount_and_sections():
     for needle in ("Network", "/network", "loadVendor(", "cytoscape(", "critical_path", "studio-network", "renderFallbackList(", "data-isolated", "data-fit"):
         assert needle in js
     for needle in ("Meetings", "/meetings", "renderMeetings(", "data-meeting-search", "data-expand", "transcript_href", "plainSummary("):
+        assert needle in js
+    for needle in ("snapshot", "liveBadge(", "certBadge(", "containerChips(", "data-snapshot-age"):
         assert needle in js
     assert "—" not in js  # no em-dashes in copy
