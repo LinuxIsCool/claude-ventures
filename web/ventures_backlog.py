@@ -28,10 +28,20 @@ _CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _ids(*values: Any) -> list[str]:
-    """Union of task-id lists under any key spelling, as digit strings, order kept."""
+    """Union of task-id lists under any key spelling, as digit strings, order kept.
+
+    Each value may be a list/tuple of ids, a single scalar id (int or str), or
+    absent/falsy; any other shape (e.g. a mapping) is skipped, never raised.
+    """
     out: list[str] = []
     for value in values:
-        for item in (value or []):
+        if isinstance(value, (list, tuple)):
+            items = value
+        elif isinstance(value, (int, str)):
+            items = [value]
+        else:
+            items = []
+        for item in items:
             m = _ID_RE.search(str(item))
             if m and m.group(1) not in out:
                 out.append(m.group(1))

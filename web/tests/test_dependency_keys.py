@@ -68,3 +68,19 @@ def test_mutation_removing_edge_unblocks(tmp_path: Path):
     ventures_backlog._CACHE.clear()
     after = ventures_tasks.records(vr, bl, scope, TODAY)[0]["blocked"]
     assert (before, after) == (True, False)
+
+
+def test_scalar_and_string_values_are_tolerated(tmp_path: Path):
+    """A bare scalar (YAML int or plain string) must not raise, not be char-split."""
+    bl = tmp_path / "backlog"; bl.mkdir()
+    _task(bl, 1, "depends_on: 7\nblocks: task-9\n")
+    rows = ventures_backlog._all_tasks(bl)
+    assert rows[0]["depends_on"] == ["7"]
+    assert rows[0]["blocks"] == ["9"]
+
+
+def test_mapping_value_is_skipped_without_raising(tmp_path: Path):
+    bl = tmp_path / "backlog"; bl.mkdir()
+    _task(bl, 1, "depends_on: {a: 1}\n")
+    rows = ventures_backlog._all_tasks(bl)
+    assert rows[0]["depends_on"] == []
