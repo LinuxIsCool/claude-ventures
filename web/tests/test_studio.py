@@ -155,3 +155,15 @@ def test_network_route(tmp_path: Path):
     c.request("GET", "/api/venture/acme/network?done=1"); r = c.getresponse()
     body = json.loads(r.read())
     assert {n["id"] for n in body["nodes"]} == {"1", "2"} and body["counts"]["edges"] == 1
+
+
+def test_meetings_route_unavailable_when_db_missing(tmp_path: Path, monkeypatch):
+    import ventures_meetings
+    monkeypatch.setattr(ventures_meetings, "_DB_DEFAULT", tmp_path / "nope.db")
+    vroot, bl = _store(tmp_path)
+    port = _serve(vroot, bl)
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", "/api/venture/acme/meetings?q=x"); r = c.getresponse()
+    assert r.status == 200
+    body = json.loads(r.read())
+    assert body["available"] is False and body["query"] == "x"

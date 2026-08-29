@@ -1,5 +1,5 @@
 # web/ventures_handler.py
-"""VenturesHandler + VenturesKernel: 5 detail routes over the read-only kernel."""
+"""VenturesHandler + VenturesKernel: 6 detail routes over the read-only kernel."""
 from __future__ import annotations
 from datetime import date
 from threading import Thread
@@ -18,6 +18,7 @@ import ventures_tasks
 import ventures_portfolio
 import ventures_studio
 import ventures_network
+import ventures_meetings
 from ventures_scope import PortfolioScope
 
 
@@ -67,6 +68,11 @@ class VenturesHandler(WebuiHandler):
                     if slug and "/" not in slug:
                         include_done = parse_qs(parsed.query).get("done", ["0"])[0] == "1"
                         self._send_json(ventures_network.network(slug, backlog_dir=bl, include_done=include_done)); return
+                if rest.endswith("/meetings"):
+                    slug = rest[:-len("/meetings")]
+                    if slug and "/" not in slug:
+                        q = parse_qs(parsed.query).get("q", [""])[0]
+                        self._send_json(ventures_meetings.catalogue(slug, q=q)); return
                 self._send_json(ventures_detail.venture(rest, ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/project/"):
                 self._send_json(ventures_detail.project(path[len("/api/project/"):], ventures_root=vroot, backlog_dir=bl)); return
