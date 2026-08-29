@@ -27,6 +27,6 @@ def test_studio_module_defines_mount_and_sections():
         assert needle in js
     assert "safeHref(" in js
     assert "safeHref(e.url)" in js and "safeHref(d.url)" in js
-    for needle in ("Network", "/network", "loadVendor(", "cytoscape(", "critical_path", "studio-network", "renderFallbackList("):
+    for needle in ("Network", "/network", "loadVendor(", "cytoscape(", "critical_path", "studio-network", "renderFallbackList(", "data-isolated", "data-fit"):
         assert needle in js
     assert "—" not in js  # no em-dashes in copy

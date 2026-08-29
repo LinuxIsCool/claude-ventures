@@ -104,6 +104,15 @@
     net.groups.projects.forEach((g, i) => projectIndex[g.key] = i);
     const onPath = new Set(opts.critical ? net.critical_path : []);
     const visible = new Set(net.nodes.filter(n => !opts.project || n.external || n.project === opts.project).map(n => n.id));
+    const touched = new Set();
+    net.edges.forEach(e => { if (visible.has(e.source) && visible.has(e.target)) { touched.add(e.source); touched.add(e.target); } });
+    if (!opts.isolated) {
+      net.nodes.forEach(n => { if (!n.external && !touched.has(n.id)) visible.delete(n.id); });
+    }
+    if (!visible.size) {
+      container.innerHTML = `<p class="text-subtext text-xs">no dependency edges among open tasks; tick "show without dependencies" to list them</p>`;
+      return null;
+    }
     const elements = [];
     net.nodes.forEach(n => { if (!visible.has(n.id)) return; elements.push({ data: {
       id: n.id, label: `#${n.id} ${n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title}`,
@@ -112,7 +121,7 @@
       dashed: n.external ? "dashed" : "solid", faded: n.done ? 0.45 : 1, path: onPath.has(n.id) ? 1 : 0, href: n.href } }); });
     net.edges.forEach(e => { if (visible.has(e.source) && visible.has(e.target)) elements.push({ data: {
       id: e.source + "->" + e.target, source: e.source, target: e.target, path: onPath.has(e.source) && onPath.has(e.target) ? 1 : 0 } }); });
-    const cy = window.cytoscape({ container, elements, wheelSensitivity: 0.2,
+    const cy = window.cytoscape({ container, elements,
       style: [
         { selector: "node", style: { "background-color": "data(colour)", "border-color": "data(border)", "border-width": 2,
           "border-style": "data(dashed)", label: "data(label)", "font-size": 9, "font-family": "monospace", color: "#cdd6f4",
@@ -123,34 +132,46 @@
           "target-arrow-shape": "triangle", "curve-style": "bezier" } },
         { selector: "edge[path = 1]", style: { width: 3, "line-color": "#f9e2af", "target-arrow-color": "#f9e2af" } },
       ],
-      layout: { name: "dagre", rankDir: "TB", nodeSep: 18, rankSep: 48 } });
+      layout: { name: "dagre", rankDir: "TB", nodeSep: 18, rankSep: 48, fit: false } });
+    cy.zoom(0.8); cy.pan({ x: 20, y: 20 });
+    container.style.height = Math.min(1400, Math.max(560, Math.ceil(cy.elements().boundingBox().h * 0.8) + 60)) + "px";
+    cy.resize();
     cy.on("tap", "node", evt => { const href = safeHref(evt.target.data("href")); if (href !== "#") window.location.assign(href); });
     return cy;
   }
 
   async function renderNetwork(section, slug, helpers) {
     const { api, esc } = helpers;
-    const state = { project: "", done: false, critical: false };
+    const state = { project: "", done: false, critical: false, isolated: false };
     section.innerHTML = `<p class="text-subtext text-xs">loading network…</p>`;
     let net;
+    let cy = null;
     const load = async () => { net = await api("api/venture/" + encodeURIComponent(slug) + "/network" + (state.done ? "?done=1" : "")); };
     try { await load(); } catch (e) { section.innerHTML = `<p class="text-xs text-yellow">network unavailable: ${esc(e && e.message ? e.message : String(e))}</p>`; return; }
     const hasLib = await loadVendor();
     const paint = () => {
+      if (cy) { cy.destroy(); cy = null; }
+      const touched = new Set();
+      net.edges.forEach(e => { touched.add(e.source); touched.add(e.target); });
+      const isolatedCount = net.nodes.filter(n => !n.external && !touched.has(n.id)).length;
       const legend = net.groups.projects.map((g, i) => `<span class="studio-legend-item"><i style="background:${projectColour(i)}"></i>${esc(g.key)} (${esc(g.count)})</span>`).join("");
-      section.innerHTML = `<div class="flex items-center gap-2 text-xs mb-2">
+      section.innerHTML = `<div class="flex items-center gap-2 text-xs mb-2 flex-wrap">
           <select class="input" data-project><option value="">all projects</option>${net.groups.projects.map(g => `<option value="${esc(g.key)}" ${state.project === g.key ? "selected" : ""}>${esc(g.key)}</option>`).join("")}</select>
           <label><input type="checkbox" data-done ${state.done ? "checked" : ""}> include done</label>
           <label><input type="checkbox" data-critical ${state.critical ? "checked" : ""}> critical path (${esc(net.critical_path.length)})</label>
+          <label><input type="checkbox" data-isolated ${state.isolated ? "checked" : ""}> show ${esc(isolatedCount)} without dependencies</label>
+          <button type="button" class="toolbar-action" data-fit>fit</button>
           <span class="text-subtext">${esc(net.counts.nodes)} tasks · ${esc(net.counts.edges)} edges · ${esc(net.counts.external)} external${net.counts.cycles ? ` · <span class="text-yellow">${esc(net.counts.cycles)} cycle edge(s) dropped</span>` : ""}</span>
         </div><div class="studio-legend mb-2">${legend}<span class="studio-legend-item"><i style="background:#313244;border:1px dashed #7f849c"></i>other venture / missing</span></div>
         <div class="studio-network" data-canvas></div>`;
       const canvas = section.querySelector("[data-canvas]");
-      if (hasLib && net.nodes.length) drawGraph(canvas, net, state);
+      if (hasLib && net.nodes.length) cy = drawGraph(canvas, net, state);
       else canvas.innerHTML = net.nodes.length ? renderFallbackList(esc, net) : `<p class="text-subtext text-xs">no open tasks with dependencies for this venture</p>`;
       section.querySelector("[data-project]").onchange = e => { state.project = e.target.value; paint(); };
       section.querySelector("[data-critical]").onchange = e => { state.critical = e.target.checked; paint(); };
+      section.querySelector("[data-isolated]").onchange = e => { state.isolated = e.target.checked; paint(); };
       section.querySelector("[data-done]").onchange = async e => { state.done = e.target.checked; await load(); paint(); };
+      section.querySelector("[data-fit]").onclick = () => { if (cy) cy.fit(undefined, 20); };
     };
     paint();
   }
