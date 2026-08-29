@@ -99,3 +99,34 @@ def test_missing_db_is_unavailable(tmp_path: Path):
 def test_limit_and_count(tmp_path: Path):
     doc = ventures_meetings.catalogue("indigenomics-ai", db_path=_db(tmp_path), limit=1)
     assert len(doc["items"]) == 1 and doc["count"] == 2 and doc["aggregates"]["meetings"] == 2
+
+
+def test_zero_duration_reports_zero(tmp_path: Path):
+    p = _db(tmp_path)
+    c = sqlite3.connect(p)
+    c.execute(
+        "INSERT INTO meetings(id,uuid,title,date,start_time,duration_seconds,source,status,transcript_id,venture_slugs,agenda,summary,tags) "
+        "VALUES ('m5','u5','Zero-length stub','2026-08-21',NULL,0,'obs','pending',NULL,'[\"indigenomics-ai\"]',NULL,NULL,'[]')")
+    c.commit(); c.close()
+    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p)
+    m5 = next(m for m in doc["items"] if m["id"] == "m5")
+    assert m5["duration_min"] == 0
+
+
+def test_read_error_degrades_to_unavailable(tmp_path: Path, monkeypatch):
+    p = _db(tmp_path)
+
+    def _boom(conn, q):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(ventures_meetings, "_search_rowids", _boom)
+    doc = ventures_meetings.catalogue("indigenomics-ai", db_path=p, q="x")
+    assert doc["available"] is False
+    assert doc["reason"].startswith("meetings.db read failed")
+    assert doc["query"] == "x"
+    assert doc["items"] == []
+
+    # No lingering lock: a fresh read/write connection works cleanly.
+    check = sqlite3.connect(p)
+    assert check.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    check.close()

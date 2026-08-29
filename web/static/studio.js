@@ -186,6 +186,17 @@
       || `<p class="text-subtext text-xs mt-2">nothing extracted for this meeting yet</p>`;
   }
 
+  // Summaries are stored as markdown; strip the markup we do not want to
+  // render literally and cap the length before esc() runs on the result.
+  function plainSummary(text) {
+    const stripped = String(text || "")
+      .split("\n").map(line => line.replace(/^#{1,6}\s*/, "")).join("\n")
+      .replace(/\*\*|__/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return stripped.length > 600 ? stripped.slice(0, 600) + "…" : stripped;
+  }
+
   function meetingRows(esc, items) {
     if (!items.length) return `<p class="text-subtext text-xs">no meetings match</p>`;
     return `<table class="studio-table text-xs studio-meetings"><thead><tr><th></th><th>date</th><th>title</th><th>source</th><th>status</th><th>D</th><th>R</th><th>A</th><th>min</th></tr></thead><tbody>` +
@@ -197,7 +208,7 @@
           <td>${esc(m.counts.decisions)}</td><td>${esc(m.counts.risks)}</td>
           <td>${esc(m.counts.actions_open)}/${esc(m.counts.actions_total)}</td>
           <td>${m.duration_min == null ? "" : esc(m.duration_min)}</td>
-        </tr><tr class="studio-meeting-detail" hidden><td></td><td colspan="8">${m.summary ? `<p class="text-xs">${esc(m.summary)}</p>` : ""}${meetingDetails(esc, m)}</td></tr>`).join("") + `</tbody></table>`;
+        </tr><tr class="studio-meeting-detail" hidden><td></td><td colspan="8">${m.summary ? `<p class="text-xs">${esc(plainSummary(m.summary))}</p>` : ""}${meetingDetails(esc, m)}</td></tr>`).join("") + `</tbody></table>`;
   }
 
   async function renderMeetings(section, slug, helpers) {

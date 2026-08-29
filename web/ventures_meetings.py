@@ -90,7 +90,7 @@ def catalogue(slug: str, db_path: Path | None = None, q: str = "", limit: int = 
             tid = r[8] or ""
             items.append({
                 "id": r[1], "date": r[2], "start_time": r[3], "title": r[4], "source": r[5], "status": r[6],
-                "duration_min": (int(r[7]) // 60) if r[7] else None,
+                "duration_min": (int(r[7]) // 60) if r[7] is not None else None,
                 "transcript_id": tid or None,
                 "transcript_href": f"/transcripts/?view=transcript&tx={tid}" if tid else None,
                 "summary": r[10] or "", "tags": _slugs(r[11]),
@@ -98,5 +98,7 @@ def catalogue(slug: str, db_path: Path | None = None, q: str = "", limit: int = 
                 "counts": {"decisions": len(d), "risks": len(rk), "actions_open": sum(1 for x in a if x["status"] == "open"), "actions_total": len(a)},
             })
         return {"available": True, "query": q, "fts": fts_ok, "count": len(matched), "items": items, "aggregates": agg, "untagged": untagged}
+    except sqlite3.Error as exc:
+        return _unavailable(f"meetings.db read failed: {exc}", q)
     finally:
         conn.close()
