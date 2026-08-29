@@ -112,6 +112,12 @@
   .w-72 { width:18rem; }
   .flex-none { flex:none; }
   .ml-1 { margin-left:0.25rem; }
+  .studio-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 1100px) { .studio-grid { grid-template-columns: minmax(0, 1fr); } }
+  .studio-table { width: 100%; border-collapse: collapse; }
+  .studio-table th { text-align: left; color: #a6adc8; font-weight: normal; padding: 2px 6px; border-bottom: 1px solid #45475a; }
+  .studio-table td { padding: 3px 6px; border-bottom: 1px solid #313244; vertical-align: top; overflow-wrap: anywhere; }
+  .studio-grid code { font-size: 0.8em; }
 </style>
 </head>
 <body class="bg-base text-text font-mono">
@@ -138,6 +144,7 @@
   </div>
 
   <script src="static/embedded-bar.js"></script>
+  <script src="static/studio.js"></script>
   <script>
     const FILTER_KEY = "ventures.statusFilters";
     function loadFilters() { try { return new Set(JSON.parse(localStorage.getItem(FILTER_KEY) || '[]').filter(x=>x!=="all")); } catch (_) { return new Set(); } }
@@ -1165,9 +1172,9 @@
              Restart the webui to see the real values.
            </div>` : "";
       const identity = ident(v.slug), colour = identity.colour || "#cba6f7";
-      const module = ["overview","work","evidence","agents","prompts"].includes(qs().get("module")) ? qs().get("module") : "overview";
+      const module = ["overview","work","evidence","agents","prompts","studio"].includes(qs().get("module")) ? qs().get("module") : "overview";
       const tabs = [
-        ["overview","Overview"],["work","Work"],["evidence","Evidence"],
+        ["overview","Overview"],["work","Work"],["studio","Studio"],["evidence","Evidence"],
         ["agents","Agents"],["prompts","Prompts"]
       ].map(([key,label]) => `<button type="button" class="venture-app-tab ${module===key?"active":""}"
           style="--vc:${colour}" data-go='${esc(JSON.stringify({v:v.slug,module:key}))}'>${label}</button>`).join("");
@@ -1184,12 +1191,14 @@
       </section>`;
       const providerModule = (title, description, href) => `<section class="ui-card"><h2 class="font-pixel text-xs text-green mb-2">${esc(title)}</h2><p class="text-xs text-subtext mb-3">${esc(description)}</p><a class="venture-details-btn" href="${esc(href)}">Open owning app</a></section>`;
       const content = module === "overview" ? manifest.bands.map(b => renderBand(v,b,manifest,staleBackend)).join("")
+        : module === "studio" ? `<div id="studio-root"></div>`
         : module === "work" ? work()
         : module === "evidence" ? providerModule("Evidence","Provider-backed meetings, transcripts, recordings, journals and knowledge relationships are the next integration slice.","/utterances/")
         : module === "agents" ? providerModule("Agent Sessions","Ephemeral sessions are owned by claude-agents. Venture-role binding will appear here after the role assignment contract ships.","/agents/")
         : providerModule("Prompts and Utterances","Reusable prompts remain owned by claude-prompts; conversational expressions and delivery evidence remain owned by claude-utterances.","/utterances/");
       d.innerHTML = backBar([{label:"← Portfolio",href:{view:"portfolio"}},{label:v.title}]) + staleBanner + hero + content;
       wireGo(d);
+      if (module === "studio") VenturesStudio.mount(d.querySelector("#studio-root"), v.slug, { api, esc });
     }
     async function renderProject(slug) {
       const p = await api("api/project/" + encodeURIComponent(slug));
