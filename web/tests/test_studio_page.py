@@ -16,6 +16,7 @@ def test_index_wires_studio_tab():
     assert '"studio"' in html.split("const module =", 1)[1].split("\n", 1)[0]
     assert 'VenturesStudio.mount(' in html
     assert '.studio-grid' in html and '.studio-table' in html
+    assert '.studio-network' in html
 
 
 def test_studio_module_defines_mount_and_sections():
@@ -26,4 +27,6 @@ def test_studio_module_defines_mount_and_sections():
         assert needle in js
     assert "safeHref(" in js
     assert "safeHref(e.url)" in js and "safeHref(d.url)" in js
+    for needle in ("Network", "/network", "loadVendor(", "cytoscape(", "critical_path", "studio-network", "renderFallbackList("):
+        assert needle in js
     assert "—" not in js  # no em-dashes in copy

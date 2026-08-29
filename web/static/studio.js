@@ -68,6 +68,93 @@
       </tr>`).join("") + `</tbody></table>`;
   }
 
+  // ---- Network section: tasks as a dependency DAG ---------------------------
+  const VENDOR = ["static/vendor/cytoscape.min.js", "static/vendor/dagre.min.js", "static/vendor/cytoscape-dagre.js"];
+  let vendorPromise = null;
+  function loadVendor() {
+    if (window.cytoscape && window.dagre) return Promise.resolve(true);
+    if (vendorPromise) return vendorPromise;
+    vendorPromise = VENDOR.reduce((p, src) => p.then(() => new Promise((res, rej) => {
+      const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src));
+      document.head.appendChild(s);
+    })), Promise.resolve()).then(() => {
+      if (window.cytoscape && window.dagre && window.cytoscapeDagre) window.cytoscape.use(window.cytoscapeDagre);
+      return !!(window.cytoscape && window.dagre);
+    }).catch(() => false);
+    return vendorPromise;
+  }
+
+  const PROJECT_COLOURS = ["#89b4fa", "#a6e3a1", "#f9e2af", "#fab387", "#cba6f7", "#94e2d5", "#f38ba8", "#b4befe"];
+  const PRIORITY_BORDER = { critical: "#f38ba8", high: "#fab387", medium: "#89b4fa", low: "#7f849c" };
+
+  function projectColour(index) { return PROJECT_COLOURS[index % PROJECT_COLOURS.length]; }
+
+  function renderFallbackList(esc, net) {
+    const byRank = {};
+    net.nodes.forEach(n => { const r = net.ranks[n.id] || 0; (byRank[r] = byRank[r] || []).push(n); });
+    return `<p class="text-xs text-subtext mb-2">Graph library unavailable; showing tasks by dependency depth.</p>` +
+      Object.keys(byRank).sort((a, b) => a - b).map(r => `<div class="mb-2"><div class="text-xs text-subtext">depth ${esc(r)}</div>` +
+        byRank[r].map(n => `<a class="flex items-center gap-2 text-xs" href="${esc(safeHref(n.href))}">
+          <span class="text-subtext">#${esc(n.id)}</span><span class="flex-1">${esc(n.title)}</span>
+          ${n.external ? badge(esc, n.venture || "missing") : badge(esc, n.project)}${badge(esc, n.status)}</a>`).join("") + `</div>`).join("");
+  }
+
+  function drawGraph(container, net, opts) {
+    const projectIndex = {};
+    net.groups.projects.forEach((g, i) => projectIndex[g.key] = i);
+    const onPath = new Set(opts.critical ? net.critical_path : []);
+    const visible = new Set(net.nodes.filter(n => !opts.project || n.external || n.project === opts.project).map(n => n.id));
+    const elements = [];
+    net.nodes.forEach(n => { if (!visible.has(n.id)) return; elements.push({ data: {
+      id: n.id, label: `#${n.id} ${n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title}`,
+      colour: n.external ? "#313244" : projectColour(projectIndex[n.project] || 0),
+      border: n.external ? "#7f849c" : (PRIORITY_BORDER[n.priority] || "#89b4fa"),
+      dashed: n.external ? "dashed" : "solid", faded: n.done ? 0.45 : 1, path: onPath.has(n.id) ? 1 : 0, href: n.href } }); });
+    net.edges.forEach(e => { if (visible.has(e.source) && visible.has(e.target)) elements.push({ data: {
+      id: e.source + "->" + e.target, source: e.source, target: e.target, path: onPath.has(e.source) && onPath.has(e.target) ? 1 : 0 } }); });
+    const cy = window.cytoscape({ container, elements, wheelSensitivity: 0.2,
+      style: [
+        { selector: "node", style: { "background-color": "data(colour)", "border-color": "data(border)", "border-width": 2,
+          "border-style": "data(dashed)", label: "data(label)", "font-size": 9, "font-family": "monospace", color: "#cdd6f4",
+          "text-wrap": "wrap", "text-max-width": 140, "text-valign": "center", shape: "round-rectangle", width: 150, height: 34,
+          opacity: "data(faded)" } },
+        { selector: "node[path = 1]", style: { "border-width": 4, "border-color": "#f9e2af" } },
+        { selector: "edge", style: { width: 1.5, "line-color": "#585b70", "target-arrow-color": "#585b70",
+          "target-arrow-shape": "triangle", "curve-style": "bezier" } },
+        { selector: "edge[path = 1]", style: { width: 3, "line-color": "#f9e2af", "target-arrow-color": "#f9e2af" } },
+      ],
+      layout: { name: "dagre", rankDir: "TB", nodeSep: 18, rankSep: 48 } });
+    cy.on("tap", "node", evt => { const href = safeHref(evt.target.data("href")); if (href !== "#") window.location.assign(href); });
+    return cy;
+  }
+
+  async function renderNetwork(section, slug, helpers) {
+    const { api, esc } = helpers;
+    const state = { project: "", done: false, critical: false };
+    section.innerHTML = `<p class="text-subtext text-xs">loading network…</p>`;
+    let net;
+    const load = async () => { net = await api("api/venture/" + encodeURIComponent(slug) + "/network" + (state.done ? "?done=1" : "")); };
+    try { await load(); } catch (e) { section.innerHTML = `<p class="text-xs text-yellow">network unavailable: ${esc(e && e.message ? e.message : String(e))}</p>`; return; }
+    const hasLib = await loadVendor();
+    const paint = () => {
+      const legend = net.groups.projects.map((g, i) => `<span class="studio-legend-item"><i style="background:${projectColour(i)}"></i>${esc(g.key)} (${esc(g.count)})</span>`).join("");
+      section.innerHTML = `<div class="flex items-center gap-2 text-xs mb-2">
+          <select class="input" data-project><option value="">all projects</option>${net.groups.projects.map(g => `<option value="${esc(g.key)}" ${state.project === g.key ? "selected" : ""}>${esc(g.key)}</option>`).join("")}</select>
+          <label><input type="checkbox" data-done ${state.done ? "checked" : ""}> include done</label>
+          <label><input type="checkbox" data-critical ${state.critical ? "checked" : ""}> critical path (${esc(net.critical_path.length)})</label>
+          <span class="text-subtext">${esc(net.counts.nodes)} tasks · ${esc(net.counts.edges)} edges · ${esc(net.counts.external)} external${net.counts.cycles ? ` · <span class="text-yellow">${esc(net.counts.cycles)} cycle edge(s) dropped</span>` : ""}</span>
+        </div><div class="studio-legend mb-2">${legend}<span class="studio-legend-item"><i style="background:#313244;border:1px dashed #7f849c"></i>other venture / missing</span></div>
+        <div class="studio-network" data-canvas></div>`;
+      const canvas = section.querySelector("[data-canvas]");
+      if (hasLib && net.nodes.length) drawGraph(canvas, net, state);
+      else canvas.innerHTML = net.nodes.length ? renderFallbackList(esc, net) : `<p class="text-subtext text-xs">no open tasks with dependencies for this venture</p>`;
+      section.querySelector("[data-project]").onchange = e => { state.project = e.target.value; paint(); };
+      section.querySelector("[data-critical]").onchange = e => { state.critical = e.target.checked; paint(); };
+      section.querySelector("[data-done]").onchange = async e => { state.done = e.target.checked; await load(); paint(); };
+    };
+    paint();
+  }
+
   async function mount(root, slug, helpers) {
     const { api, esc } = helpers;
     root.innerHTML = `<p class="text-subtext text-xs">loading studio…</p>`;
@@ -88,9 +175,11 @@
         <h2 class="font-pixel text-xs text-green mb-2">Domains (${esc(doc.counts.domains)})</h2>
         ${domainRows(esc, doc.domains)}
         <h2 class="font-pixel text-xs text-green mt-4 mb-2">Coming</h2>
-        <p class="text-xs text-subtext">Meetings, task network and live health land in later phases (${esc(Object.keys(doc.phase).join(", "))}).</p>
+        <p class="text-xs text-subtext">Meetings and live health land in later phases (${esc(Object.keys(doc.phase).join(", "))}).</p>
       </section>
-    </div>`;
+      </div>
+      <section class="mt-4"><h2 class="font-pixel text-xs text-green mb-2">Network</h2><div data-network></div></section>`;
+    renderNetwork(root.querySelector("[data-network]"), slug, helpers);
   }
 
   window.VenturesStudio = { mount };
