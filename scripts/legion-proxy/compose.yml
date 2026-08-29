@@ -1,0 +1,40 @@
+# Legion local proxy (task-824 Phase 1.5): one Traefik in front of every app
+# stack that joins the external `legion` Docker network and carries
+# traefik.* labels. Hostnames are <app>.<env>.legion.localhost, which browsers
+# resolve to loopback without /etc/hosts. Bound to 127.0.0.1 only.
+#
+#   docker network create legion            # once
+#   docker compose -p legion-proxy -f scripts/legion-proxy/compose.yml up -d
+#
+# Only containers that opt in (traefik.enable=true) are routed.
+name: legion-proxy
+
+services:
+  traefik:
+    image: traefik:v3.7
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=legion
+      - --entrypoints.web.address=:80
+      - --api.dashboard=false
+      - --log.level=WARN
+    environment:
+      # Docker 29 dropped API versions below 1.40. Traefik 3.1-3.5 hardcode a
+      # 1.24 client and fail; 3.7 negotiates. Keep >= v3.7.
+      DOCKER_API_VERSION: "1.44"
+    ports:
+      - "127.0.0.1:8888:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - legion
+    labels:
+      legion.venture: legion
+      legion.app: legion-proxy
+      legion.env: local
+    restart: unless-stopped
+
+networks:
+  legion:
+    external: true
