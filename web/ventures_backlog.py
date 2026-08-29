@@ -27,6 +27,17 @@ _ID_RE = re.compile(r"(?:task-)?(\d+)")
 _CACHE: dict[str, dict[str, Any]] = {}
 
 
+def _ids(*values: Any) -> list[str]:
+    """Union of task-id lists under any key spelling, as digit strings, order kept."""
+    out: list[str] = []
+    for value in values:
+        for item in (value or []):
+            m = _ID_RE.search(str(item))
+            if m and m.group(1) not in out:
+                out.append(m.group(1))
+    return out
+
+
 def _frontmatter(text: str) -> dict[str, Any]:
     if not text.startswith("---"):
         return {}
@@ -64,8 +75,10 @@ def _all_tasks(d: Path) -> list[dict[str, Any]]:
             "program": fm.get("program") or resolution.program,
             "project": fm.get("project") or resolution.project,
             "due": str(fm.get("due") or ""),
-            "blocked_by": fm.get("blocked_by") or [],
-            "dependencies": fm.get("dependencies") or [],
+            # Schema keys are depends_on / blocks (claude_backlog.schema).
+            # blocked_by and dependencies are legacy spellings still in the corpus.
+            "depends_on": _ids(fm.get("depends_on"), fm.get("blocked_by"), fm.get("dependencies")),
+            "blocks": _ids(fm.get("blocks")),
             "_parent_id": str(fm.get("parent_id") or ""),
         })
     return out

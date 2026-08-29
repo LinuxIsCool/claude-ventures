@@ -28,7 +28,7 @@ def _venture_id(task: dict) -> str:
 
 
 def _blocked(task: dict) -> bool:
-    return bool(task.get("blocked_by") or task.get("dependencies")) or \
+    return bool(task.get("depends_on")) or \
         str(task.get("status", "")).strip().lower() == "blocked"
 
 
