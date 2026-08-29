@@ -24,4 +24,6 @@ def test_studio_module_defines_mount_and_sections():
     assert "mount(" in js
     for needle in ("Library", "Domains", "studio-grid", "studio-table", "/studio"):
         assert needle in js
+    assert "safeHref(" in js
+    assert "safeHref(e.url)" in js and "safeHref(d.url)" in js
     assert "—" not in js  # no em-dashes in copy
