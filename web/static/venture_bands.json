@@ -92,6 +92,12 @@
       "reads": ["projects"]
     },
     {
+      "key": "apps",
+      "title": "Apps",
+      "renderer": "chips",
+      "reads": ["apps[]"]
+    },
+    {
       "key": "tasks",
       "title": "Tasks",
       "renderer": "custom",
