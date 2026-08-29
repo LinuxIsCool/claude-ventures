@@ -64,7 +64,7 @@ def test_studio_document_shape(tmp_path: Path):
     assert doc["domains"][0]["status"] == "live" and doc["domains"][1]["status"] == "declared"
     assert doc["counts"] == {"apps": 1, "domains": 3, "controllable": 2}
     assert doc["errors"] == []
-    assert doc["phase"]["meetings"] == "later"
+    assert doc["phase"]["meetings"] == "done"
 
 
 def test_app_without_repo_path_has_git_none(tmp_path: Path):
@@ -167,3 +167,32 @@ def test_meetings_route_unavailable_when_db_missing(tmp_path: Path, monkeypatch)
     assert r.status == 200
     body = json.loads(r.read())
     assert body["available"] is False and body["query"] == "x"
+
+
+def test_studio_merges_snapshot(tmp_path: Path):
+    import studio_snapshot
+    from datetime import datetime, timezone, timedelta
+    vroot, bl = _store(tmp_path)
+    snap = tmp_path / "snap.json"
+    gen = datetime(2026, 8, 29, 17, 0, tzinfo=timezone.utc)
+    studio_snapshot.write_snapshot({"generated_at": gen.isoformat(), "interval_s": 60, "apps": {
+        "acme/site": {"git": {"ok": True, "branch": "main"}, "environments": {"dev": {"ok": True, "decided_by": "body", "status": 200, "elapsed_ms": 3.2, "checked_at": gen.isoformat(), "probe": "x", "error": None}},
+                      "containers": [{"name": "c1", "env": "dev", "state": "running", "health": "healthy"}], "containers_error": None}},
+        "certs": {"acme.test": {"not_after": "2026-11-08T01:20:21+00:00", "days_left": 71, "error": None, "checked_at": gen.isoformat()}},
+        "fleet": [], "errors": []}, path=snap)
+    doc = ventures_studio.studio("acme", ventures_root=vroot, backlog_dir=bl, snapshot_path=snap, now=gen + timedelta(seconds=30))
+    assert doc["snapshot"]["present"] is True and doc["snapshot"]["stale"] is False
+    app = doc["apps"][0]
+    assert app["live"]["containers"][0]["health"] == "healthy"
+    envs = {e["name"]: e for e in app["environments"]}
+    assert envs["dev"]["live"]["ok"] is True and envs["prod"]["live"] is None
+    domains = {d["host"]: d for d in doc["domains"]}
+    assert domains["acme.test"]["cert"]["days_left"] == 71 and domains["dev.acme.test"]["cert"] is None
+    assert doc["phase"]["live"] == "snapshot"
+
+
+def test_studio_without_snapshot_is_stale_not_broken(tmp_path: Path):
+    vroot, bl = _store(tmp_path)
+    doc = ventures_studio.studio("acme", ventures_root=vroot, backlog_dir=bl, snapshot_path=tmp_path / "none.json")
+    assert doc["snapshot"] == {"present": False, "generated_at": None, "age_s": None, "stale": True, "interval_s": 60}
+    assert doc["apps"][0]["live"] is None and all(e["live"] is None for e in doc["apps"][0]["environments"])

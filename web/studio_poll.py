@@ -19,7 +19,6 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
@@ -208,18 +207,19 @@ def run_once(snapshot_path: Path | None, ventures_root: Path | None, interval_s:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Studio live-state poller")
-    ap.add_argument("--once", action="store_true", default=True)
-    ap.add_argument("--interval", type=int, default=0, help="loop every N seconds (0 = once)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="one pass (default when neither flag is given)")
+    mode.add_argument("--interval", type=int, default=None, help="loop every N seconds")
     ap.add_argument("--snapshot", default=None)
     ap.add_argument("--ventures-root", default=None)
     args = ap.parse_args(argv)
     snap_path = Path(args.snapshot) if args.snapshot else None
     vroot = Path(args.ventures_root) if args.ventures_root else None
-    interval = args.interval if args.interval > 0 else studio_snapshot.DEFAULT_INTERVAL_S
+    interval = args.interval if args.interval else studio_snapshot.DEFAULT_INTERVAL_S
     while True:
         snap = run_once(snap_path, vroot, interval)
         print(f"studio-poll: {len(snap['apps'])} apps, {len(snap['certs'])} certs, {snap['elapsed_ms']:.0f} ms", file=sys.stderr)
-        if args.interval <= 0:
+        if not args.interval:
             return 0
         time.sleep(args.interval)
 

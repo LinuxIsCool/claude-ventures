@@ -130,3 +130,18 @@ def test_read_error_degrades_to_unavailable(tmp_path: Path, monkeypatch):
     check = sqlite3.connect(p)
     assert check.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     check.close()
+
+
+def test_catalogue_is_cached_on_db_mtime(tmp_path: Path, monkeypatch):
+    p = _db(tmp_path)
+    calls = {"n": 0}
+    real = ventures_meetings._build
+    def counting(*a, **k):
+        calls["n"] += 1; return real(*a, **k)
+    monkeypatch.setattr(ventures_meetings, "_build", counting)
+    ventures_meetings.catalogue("indigenomics-ai", db_path=p); ventures_meetings.catalogue("indigenomics-ai", db_path=p)
+    assert calls["n"] == 1
+    import os, time
+    os.utime(p, (time.time() + 5, time.time() + 5))
+    ventures_meetings.catalogue("indigenomics-ai", db_path=p)
+    assert calls["n"] == 2

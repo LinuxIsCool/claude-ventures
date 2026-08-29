@@ -13,8 +13,11 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import ventures_cache
+
 _DB_DEFAULT = Path.home() / ".claude" / "local" / "meetings" / "meetings.db"
 _EMPTY_AGG = {"meetings": 0, "decisions": 0, "risks": 0, "actions_open": 0}
+_CACHE: dict = {}
 
 
 def slug_matches(meeting_slug: str, venture_slug: str) -> bool:
@@ -69,6 +72,11 @@ def catalogue(slug: str, db_path: Path | None = None, q: str = "", limit: int = 
     path = Path(db_path) if db_path else _DB_DEFAULT
     if not path.is_file():
         return _unavailable("meetings.db not found", q)
+    sig = ventures_cache.mtime_signature([path])
+    return ventures_cache.cached(_CACHE, (str(path), slug, q, limit), sig, lambda: _build(path, slug, q, limit))
+
+
+def _build(path: Path, slug: str, q: str, limit: int) -> dict[str, Any]:
     try:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     except sqlite3.Error as exc:
