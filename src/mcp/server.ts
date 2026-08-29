@@ -21,8 +21,10 @@ import { localDateStr } from "../utils/dates";
 
 import { ProjectStore } from "../store/project";
 import { MilestoneStore } from "../store/milestone";
+import { AppStore } from "../store/app";
 import { makeProjectTools } from "./tools/project-tools";
 import { makeMilestoneTools } from "./tools/milestone-tools";
+import { makeAppTools } from "./tools/app-tools";
 import { makeTreeTools } from "./tools/tree-tools";
 
 import {
@@ -47,6 +49,11 @@ import {
   PROJECT_GET_SCHEMA,
   PROJECT_UPDATE_SCHEMA,
   PROJECT_CLOSE_SCHEMA,
+  APP_CREATE_SCHEMA,
+  APP_LIST_SCHEMA,
+  APP_GET_SCHEMA,
+  APP_UPDATE_SCHEMA,
+  APP_CLOSE_SCHEMA,
   MILESTONE_CREATE_SCHEMA,
   MILESTONE_LIST_SCHEMA,
   MILESTONE_GET_SCHEMA,
@@ -87,8 +94,10 @@ async function main() {
   // Fractal V/P/M wiring (task-416 Phase 1)
   const projectStore = new ProjectStore({ ventures_root: paths.base });
   const milestoneStore = new MilestoneStore({ ventures_root: paths.base });
+  const appStore = new AppStore({ ventures_root: paths.base });
   const projectTools = makeProjectTools(projectStore);
   const milestoneTools = makeMilestoneTools(milestoneStore);
+  const appTools = makeAppTools(appStore);
   const treeTools = makeTreeTools({ ventures_root: paths.base });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -202,6 +211,31 @@ async function main() {
         name: "project_close",
         description: "Close a Project — transition stage to sustaining/dormant/harvesting",
         inputSchema: PROJECT_CLOSE_SCHEMA,
+      },
+      {
+        name: "app_create",
+        description: "Create an App (deployable application) under a Venture",
+        inputSchema: APP_CREATE_SCHEMA,
+      },
+      {
+        name: "app_list",
+        description: "List Apps, optionally filtered by venture/project/stage/kind",
+        inputSchema: APP_LIST_SCHEMA,
+      },
+      {
+        name: "app_get",
+        description: "Get an App by venture+slug",
+        inputSchema: APP_GET_SCHEMA,
+      },
+      {
+        name: "app_update",
+        description: "Update an App (merge patch)",
+        inputSchema: APP_UPDATE_SCHEMA,
+      },
+      {
+        name: "app_close",
+        description: "Close an App: stage to paused or retired",
+        inputSchema: APP_CLOSE_SCHEMA,
       },
       {
         name: "milestone_create",
@@ -718,6 +752,26 @@ async function main() {
         }
         case "project_close": {
           const value = await projectTools.project_close(args as any);
+          return jsonResponse(value);
+        }
+        case "app_create": {
+          const value = await appTools.app_create(args as any);
+          return jsonResponse(value);
+        }
+        case "app_list": {
+          const value = await appTools.app_list(args as any);
+          return jsonResponse(value);
+        }
+        case "app_get": {
+          const value = await appTools.app_get(args as any);
+          return jsonResponse(value);
+        }
+        case "app_update": {
+          const value = await appTools.app_update(args as any);
+          return jsonResponse(value);
+        }
+        case "app_close": {
+          const value = await appTools.app_close(args as any);
           return jsonResponse(value);
         }
         case "milestone_create": {

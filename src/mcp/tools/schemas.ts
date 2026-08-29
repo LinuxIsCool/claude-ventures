@@ -434,6 +434,102 @@ export const PROJECT_CLOSE_SCHEMA = {
   required: ["venture", "slug", "stage"],
 };
 
+const APP_KIND = { type: "string", enum: ["web", "api", "static", "pipeline", "library"] };
+const APP_STAGE = { type: "string", enum: ["planned", "active", "paused", "retired"] };
+const APP_ENVIRONMENT = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    url: { type: "string" },
+    host: { type: "string" },
+    healthz: { type: "string", description: "path appended to url" },
+    deploy: { type: "string", enum: ["compose", "vercel", "pages", "nginx", "manual"] },
+    status: { type: "string", enum: ["live", "unprovisioned", "paused"] },
+    controllable: { type: "boolean", description: "Studio may start/stop; default true only for dev" },
+  },
+  required: ["name"],
+};
+const APP_RUNTIME = {
+  type: "object",
+  properties: {
+    kind: { type: "string", enum: ["compose", "process", "none"] },
+    file: { type: "string" },
+    project: { type: "string" },
+    network: { type: "string" },
+    hostname: { type: "string" },
+  },
+  required: ["kind"],
+};
+const APP_REPO = {
+  type: "object",
+  properties: {
+    path: { type: "string" },
+    remote: { type: "string" },
+    default_branch: { type: "string" },
+    vcs: { type: "string", enum: ["git", "jj+git"] },
+  },
+  required: ["path"],
+};
+
+export const APP_CREATE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    slug: SLUG_SEGMENT,
+    name: { type: "string" },
+    venture: SLUG_SEGMENT,
+    project: SLUG_SEGMENT,
+    kind: APP_KIND,
+    stage: APP_STAGE,
+    repo: APP_REPO,
+    run: { type: "string" },
+    test: { type: "string" },
+    status_doc: { type: "string" },
+    environments: { type: "array", items: APP_ENVIRONMENT },
+    depends_on: { type: "array", items: { type: "string" } },
+    secrets: { type: "string", description: "path to an env file; never values" },
+    runtime: APP_RUNTIME,
+    notes: { type: "string" },
+  },
+  required: ["slug", "name", "venture", "kind", "stage", "repo", "environments", "depends_on"],
+};
+
+export const APP_LIST_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    project: SLUG_SEGMENT,
+    stage: APP_STAGE,
+    kind: APP_KIND,
+    sort_by: { type: "string", enum: ["name", "created", "updated"] },
+    sort_order: { type: "string", enum: ["asc", "desc"] },
+    limit: { type: "integer" },
+    offset: { type: "integer" },
+  },
+};
+
+export const APP_GET_SCHEMA = {
+  type: "object" as const,
+  properties: { venture: SLUG_SEGMENT, slug: SLUG_SEGMENT },
+  required: ["venture", "slug"],
+};
+
+export const APP_UPDATE_SCHEMA = {
+  type: "object" as const,
+  properties: { venture: SLUG_SEGMENT, slug: SLUG_SEGMENT, patch: { type: "object" } },
+  required: ["venture", "slug", "patch"],
+};
+
+export const APP_CLOSE_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    venture: SLUG_SEGMENT,
+    slug: SLUG_SEGMENT,
+    stage: { type: "string", enum: ["paused", "retired"] },
+    retro_md: { type: "string" },
+  },
+  required: ["venture", "slug", "stage"],
+};
+
 export const MILESTONE_CREATE_SCHEMA = {
   type: "object" as const,
   properties: {
