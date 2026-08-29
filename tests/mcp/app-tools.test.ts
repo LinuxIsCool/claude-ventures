@@ -39,6 +39,22 @@ describe("app tools", () => {
     expect(out.map((a) => a.slug)).toEqual(["api", "listening"]);
   });
 
+  test("list filters by stage array", async () => {
+    await tools.app_create({ ...input, slug: "active-app", stage: "active" });
+    await tools.app_create({ ...input, slug: "paused-app", stage: "paused" });
+    await tools.app_create({ ...input, slug: "retired-app", stage: "retired" });
+    const out = await tools.app_list({ venture: "civic-intelligence-engine", stage: ["active", "paused"] });
+    expect(out.map((a) => a.slug).sort()).toEqual(["active-app", "paused-app"]);
+  });
+
+  test("list filters by kind array", async () => {
+    await tools.app_create({ ...input, slug: "static-app", kind: "static" });
+    await tools.app_create({ ...input, slug: "web-app", kind: "web" });
+    await tools.app_create({ ...input, slug: "api-app", kind: "api" });
+    const out = await tools.app_list({ venture: "civic-intelligence-engine", kind: ["static", "web"] });
+    expect(out.map((a) => a.slug).sort()).toEqual(["static-app", "web-app"]);
+  });
+
   test("update merges a patch", async () => {
     await tools.app_create(input);
     const out = await tools.app_update({ venture: "civic-intelligence-engine", slug: "listening", patch: { run: "npm run dev" } });

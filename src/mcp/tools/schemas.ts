@@ -498,12 +498,12 @@ export const APP_LIST_SCHEMA = {
   properties: {
     venture: SLUG_SEGMENT,
     project: SLUG_SEGMENT,
-    stage: APP_STAGE,
-    kind: APP_KIND,
+    stage: { oneOf: [APP_STAGE, { type: "array", items: APP_STAGE }] },
+    kind: { oneOf: [APP_KIND, { type: "array", items: APP_KIND }] },
     sort_by: { type: "string", enum: ["name", "created", "updated"] },
     sort_order: { type: "string", enum: ["asc", "desc"] },
-    limit: { type: "integer" },
-    offset: { type: "integer" },
+    limit: { type: "number" },
+    offset: { type: "number" },
   },
 };
 
