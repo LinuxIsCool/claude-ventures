@@ -81,6 +81,31 @@ def test_not_found(tmp_path: Path):
     assert ventures_studio.studio("nope", ventures_root=vroot, backlog_dir=bl) == {"error": "not found", "slug": "nope"}
 
 
+def test_environment_entries_that_are_not_dicts_are_ignored(tmp_path: Path):
+    vroot, bl = _store(tmp_path)
+    d = vroot / "acme" / "apps" / "weird"; d.mkdir()
+    (d / "app.md").write_text(
+        "---\nslug: weird\nname: W\nventure: acme\nkind: web\nstage: active\n"
+        "repo: {}\nenvironments:\n  - dev\n  - name: prod\n    url: https://weird.acme.test\n"
+        "depends_on: []\n---\n"
+    )
+    doc = ventures_studio.studio("acme", ventures_root=vroot, backlog_dir=bl)
+    weird = next(a for a in doc["apps"] if a["slug"] == "weird")
+    assert [e["name"] for e in weird["environments"]] == ["prod"]
+
+
+def test_environment_url_without_scheme_is_dropped_from_domains(tmp_path: Path):
+    vroot, bl = _store(tmp_path)
+    d = vroot / "acme" / "apps" / "local"; d.mkdir()
+    (d / "app.md").write_text(
+        "---\nslug: local\nname: L\nventure: acme\nkind: web\nstage: active\n"
+        "repo: {}\nenvironments:\n  - name: dev\n    url: localhost:3000\n"
+        "depends_on: []\n---\n"
+    )
+    doc = ventures_studio.studio("acme", ventures_root=vroot, backlog_dir=bl)
+    assert all(d["app"] != "local" for d in doc["domains"])
+
+
 def _serve(vroot: Path, bl: Path) -> int:
     accessor = VenturesAccessor(data_root=vroot)
     kernel = VenturesKernel(accessor=accessor, port=0, bind="127.0.0.1", signature_fn=accessor.signature,
@@ -100,3 +125,18 @@ def test_route_serves_document_and_detail_still_works(tmp_path: Path):
     assert body["counts"]["apps"] == 1
     c.request("GET", "/api/venture/acme"); r = c.getresponse()
     assert r.status == 200 and json.loads(r.read())["slug"] == "acme"
+
+
+def test_venture_slugged_studio_still_gets_detail(tmp_path: Path):
+    vroot, bl = _store(tmp_path)
+    (vroot / "active" / "studio.md").write_text("---\nid: studio\ntitle: Studio Venture\nstage: active\npriority: high\n---\n")
+    port = _serve(vroot, bl)
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", "/api/venture/studio"); r = c.getresponse()
+    assert r.status == 200
+    body = json.loads(r.read())
+    assert body["slug"] == "studio" and body["title"] == "Studio Venture"
+    c.request("GET", "/api/venture/studio/studio"); r = c.getresponse()
+    assert r.status == 200
+    body = json.loads(r.read())
+    assert body["counts"]["apps"] == 0

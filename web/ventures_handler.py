@@ -55,11 +55,13 @@ class VenturesHandler(WebuiHandler):
                 self._send_json(ventures_priorities.ranked(vroot, bl, date.today())); return
             if path == "/api/trends":
                 self._send_json(ventures_trends.trends(vroot, bl, date.today())); return
-            if path.startswith("/api/venture/") and path.endswith("/studio"):
-                slug = path[len("/api/venture/"):-len("/studio")]
-                self._send_json(ventures_studio.studio(slug, ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/venture/"):
-                self._send_json(ventures_detail.venture(path[len("/api/venture/"):], ventures_root=vroot, backlog_dir=bl)); return
+                rest = path[len("/api/venture/"):]
+                if rest.endswith("/studio"):
+                    slug = rest[:-len("/studio")]
+                    if slug and "/" not in slug:
+                        self._send_json(ventures_studio.studio(slug, ventures_root=vroot, backlog_dir=bl)); return
+                self._send_json(ventures_detail.venture(rest, ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/project/"):
                 self._send_json(ventures_detail.project(path[len("/api/project/"):], ventures_root=vroot, backlog_dir=bl)); return
             if path.startswith("/api/milestone/"):
