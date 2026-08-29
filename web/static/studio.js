@@ -176,6 +176,55 @@
     paint();
   }
 
+  // ---- Meetings section: catalogue from meetings.db -------------------------
+  function meetingDetails(esc, m) {
+    const list = (title, rows, fmt) => rows.length ? `<div class="mt-2"><div class="text-subtext text-xs">${title} (${esc(rows.length)})</div>` +
+      rows.map(r => `<div class="text-xs studio-meeting-item">${fmt(r)}${r.quote ? `<div class="text-subtext studio-quote">“${esc(r.quote)}”</div>` : ""}</div>`).join("") + `</div>` : "";
+    return list("Decisions", m.decisions, r => `${esc(r.text)} ${badge(esc, r.type)}${r.reversibility && r.reversibility !== "unknown" ? " " + badge(esc, r.reversibility) : ""}`)
+      + list("Risks", m.risks, r => `${esc(r.text)} ${badge(esc, r.severity)}${r.mitigation ? `<div class="text-subtext">mitigation: ${esc(r.mitigation)}</div>` : ""}`)
+      + list("Action items", m.actions, r => `${esc(r.text)} ${badge(esc, r.status, r.status === "open" ? "text-yellow" : "")}${r.assignee ? ` <span class="text-subtext">${esc(r.assignee)}</span>` : ""}${r.deadline ? ` <span class="text-subtext">${esc(r.deadline)}</span>` : ""}${r.backlog_task_id ? ` <a class="text-blue" href="${esc(safeHref("/backlog/tasks/" + r.backlog_task_id))}">#${esc(r.backlog_task_id)}</a>` : ""}`)
+      || `<p class="text-subtext text-xs mt-2">nothing extracted for this meeting yet</p>`;
+  }
+
+  function meetingRows(esc, items) {
+    if (!items.length) return `<p class="text-subtext text-xs">no meetings match</p>`;
+    return `<table class="studio-table text-xs studio-meetings"><thead><tr><th></th><th>date</th><th>title</th><th>source</th><th>status</th><th>D</th><th>R</th><th>A</th><th>min</th></tr></thead><tbody>` +
+      items.map(m => `<tr data-expand="${esc(m.id)}">
+          <td><button type="button" class="toolbar-action" aria-label="expand">+</button></td>
+          <td>${esc(m.date)}</td>
+          <td>${m.transcript_href ? `<a class="text-blue" href="${esc(safeHref(m.transcript_href))}">${esc(m.title)}</a>` : esc(m.title)}</td>
+          <td>${esc(m.source)}</td><td>${badge(esc, m.status)}</td>
+          <td>${esc(m.counts.decisions)}</td><td>${esc(m.counts.risks)}</td>
+          <td>${esc(m.counts.actions_open)}/${esc(m.counts.actions_total)}</td>
+          <td>${m.duration_min == null ? "" : esc(m.duration_min)}</td>
+        </tr><tr class="studio-meeting-detail" hidden><td></td><td colspan="8">${m.summary ? `<p class="text-xs">${esc(m.summary)}</p>` : ""}${meetingDetails(esc, m)}</td></tr>`).join("") + `</tbody></table>`;
+  }
+
+  async function renderMeetings(section, slug, helpers) {
+    const { api, esc } = helpers;
+    let q = "";
+    const load = () => api("api/venture/" + encodeURIComponent(slug) + "/meetings" + (q ? "?q=" + encodeURIComponent(q) : ""));
+    const paint = async () => {
+      section.innerHTML = `<p class="text-subtext text-xs">loading meetings…</p>`;
+      let doc;
+      try { doc = await load(); } catch (e) { section.innerHTML = `<p class="text-xs text-yellow">meetings unavailable: ${esc(e && e.message ? e.message : String(e))}</p>`; return; }
+      if (!doc.available) { section.innerHTML = `<p class="text-xs text-subtext">meetings unavailable: ${esc(doc.reason)}</p>`; return; }
+      const a = doc.aggregates;
+      section.innerHTML = `<form class="flex items-center gap-2 text-xs mb-2" data-meeting-search>
+          <input class="input" name="q" value="${esc(q)}" placeholder="search title, summary, agenda">
+          <button type="submit" class="toolbar-action">search</button>
+          <span class="text-subtext">${esc(a.meetings)} meetings · ${esc(a.decisions)} decisions · ${esc(a.risks)} risks · ${esc(a.actions_open)} open actions${doc.fts ? "" : " · plain search (no FTS)"}</span>
+        </form>
+        ${meetingRows(esc, doc.items)}
+        ${doc.untagged ? `<p class="text-subtext text-xs mt-2">${esc(doc.untagged)} meetings in the corpus carry no venture tag and cannot appear here.</p>` : ""}`;
+      section.querySelector("[data-meeting-search]").onsubmit = e => { e.preventDefault(); q = e.target.q.value.trim(); paint(); };
+      section.querySelectorAll("tr[data-expand]").forEach(tr => tr.querySelector("button").onclick = () => {
+        const detail = tr.nextElementSibling; detail.hidden = !detail.hidden; tr.querySelector("button").textContent = detail.hidden ? "+" : "-";
+      });
+    };
+    await paint();
+  }
+
   async function mount(root, slug, helpers) {
     const { api, esc } = helpers;
     root.innerHTML = `<p class="text-subtext text-xs">loading studio…</p>`;
@@ -196,11 +245,13 @@
         <h2 class="font-pixel text-xs text-green mb-2">Domains (${esc(doc.counts.domains)})</h2>
         ${domainRows(esc, doc.domains)}
         <h2 class="font-pixel text-xs text-green mt-4 mb-2">Coming</h2>
-        <p class="text-xs text-subtext">Meetings and live health land in later phases (${esc(Object.keys(doc.phase).join(", "))}).</p>
+        <p class="text-xs text-subtext">Live health lands in a later phase.</p>
       </section>
       </div>
+      <section class="mt-4"><h2 class="font-pixel text-xs text-green mb-2">Meetings</h2><div data-meetings></div></section>
       <section class="mt-4"><h2 class="font-pixel text-xs text-green mb-2">Network</h2><div data-network></div></section>`;
     renderNetwork(root.querySelector("[data-network]"), slug, helpers);
+    renderMeetings(root.querySelector("[data-meetings]"), slug, helpers);
   }
 
   window.VenturesStudio = { mount };
