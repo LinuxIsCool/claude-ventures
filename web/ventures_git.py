@@ -18,7 +18,13 @@ _TIMEOUT = 2.0
 
 
 def _git(path: Path, *args: str) -> str:
-    out = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, timeout=_TIMEOUT, check=True)
+    # Read-only callers must not let `git status` opportunistically refresh
+    # and rewrite .git/index (its "racily clean" stat-cache side effect):
+    # that touch changes the index mtime even when nothing real changed, so
+    # the cache signature could never match itself between calls.
+    # GIT_OPTIONAL_LOCKS=0 is git's documented escape hatch for this.
+    env = dict(os.environ, GIT_OPTIONAL_LOCKS="0")
+    out = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, timeout=_TIMEOUT, check=True, env=env)
     return out.stdout.strip()
 
 
@@ -59,15 +65,4 @@ def repo_state(raw_path: str) -> dict[str, Any]:
         return {"ok": False, "path": str(path), "reason": "missing"}
     if not (path / ".git").exists():
         return {"ok": False, "path": str(path), "reason": "not a git repo"}
-    key = str(path)
-    entry = _CACHE.get(key)
-    if entry is not None and entry["sig"] == _signature(path):
-        return entry["value"]
-    # `git status` (inside _read) rewrites .git/index's mtime as a side
-    # effect of its racily-clean stat-cache refresh, even when nothing
-    # changed. Re-signature after the read, not before, so that self-
-    # inflicted touch is captured in what we cache against rather than
-    # invalidating the entry on every subsequent call.
-    value = _read(path)
-    _CACHE[key] = {"sig": _signature(path), "value": value}
-    return value
+    return ventures_cache.cached(_CACHE, str(path), _signature(path), lambda: _read(path))
