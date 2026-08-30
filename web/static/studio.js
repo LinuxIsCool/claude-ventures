@@ -128,17 +128,21 @@
     const cy = window.cytoscape({ container, elements,
       style: [
         { selector: "node", style: { "background-color": "data(colour)", "border-color": "data(border)", "border-width": 2,
-          "border-style": "data(dashed)", label: "data(label)", "font-size": 9, "font-family": "monospace", color: "#cdd6f4",
-          "text-wrap": "wrap", "text-max-width": 140, "text-valign": "center", shape: "round-rectangle", width: 150, height: 34,
+          "border-style": "data(dashed)", label: "data(label)", "font-size": 13, "font-family": "monospace", color: "#cdd6f4",
+          "text-wrap": "wrap", "text-max-width": 165, "text-valign": "center", shape: "round-rectangle", width: 190, height: 44,
           opacity: "data(faded)" } },
         { selector: "node[path = 1]", style: { "border-width": 4, "border-color": "#f9e2af" } },
         { selector: "edge", style: { width: 1.5, "line-color": "#585b70", "target-arrow-color": "#585b70",
           "target-arrow-shape": "triangle", "curve-style": "bezier" } },
         { selector: "edge[path = 1]", style: { width: 3, "line-color": "#f9e2af", "target-arrow-color": "#f9e2af" } },
       ],
-      layout: { name: "dagre", rankDir: "TB", nodeSep: 18, rankSep: 48, fit: false } });
-    cy.zoom(0.8); cy.pan({ x: 20, y: 20 });
-    container.style.height = Math.min(1400, Math.max(560, Math.ceil(cy.elements().boundingBox().h * 0.8) + 60)) + "px";
+      layout: { name: "dagre", rankDir: "TB", nodeSep: 24, rankSep: 56, fit: false } });
+    // Zoom stays at 1 (actual size) so labels stay legible; the container
+    // scrolls (`.studio-network { overflow: auto }`) instead of shrinking
+    // to fit. The toolbar's "fit" button remains the explicit opt-in for a
+    // zoomed-out whole-graph view.
+    cy.zoom(1); cy.pan({ x: 20, y: 20 });
+    container.style.height = Math.min(1400, Math.max(560, Math.ceil(cy.elements().boundingBox().h * cy.zoom()) + 60)) + "px";
     cy.resize();
     cy.on("tap", "node", evt => { const href = safeHref(evt.target.data("href")); if (href !== "#") window.location.assign(href); });
     return cy;
