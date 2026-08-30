@@ -86,7 +86,7 @@ def build_kernel(port: int = 8891, bind: str = "127.0.0.1", ventures_root: Path 
                  shells_path: Path | None = None, run=None, shells: A.Shells | None = None, audit_dir: Path | None = None) -> WebuiKernel:
     log = Path(log_path) if log_path else A.ACTION_LOG_DEFAULT
     runner = run or A.default_run
-    sh = shells or A.Shells(shells_path)
+    sh = shells or A.Shells(shells_path, log_path=log)
     catalog = MutationCatalog(audit_dir=audit_dir or AUDIT_DIR_DEFAULT, timeout_s=90, paradigm="channel-rpc")
 
     def act(action):

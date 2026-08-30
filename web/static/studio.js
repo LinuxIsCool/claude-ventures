@@ -32,7 +32,7 @@
         <td>${badge(esc, e.status || "declared")}</td>
         <td>${liveBadge(esc, e.live, opts.stale, opts.nowMs)}</td>
         <td>${e.controllable ? badge(esc, "controllable", "text-green") : `<span class="text-subtext">read only</span>`}</td>
-        <td>${actionButtons(esc, a, e)}</td>
+        <td>${actionButtons(esc, a, e, opts.venture)}</td>
       </tr>`).join("") + `</tbody></table>`;
   }
 
@@ -277,11 +277,13 @@
     let body = null; try { body = await r.json(); } catch (_) { body = null; }
     if (r.status === 404 && !body) return { unavailable: true, message: "studio-actions mount is not running" };
     if (!r.ok) return { error: (body && (body.code || body.error || body.message)) || `HTTP ${r.status}`, body };
+    if (!body) return { error: "non-JSON response" };
     return body.result || body;
   }
-  function actionButtons(esc, a, e) {
+  function actionButtons(esc, a, e, ventureSlug) {
     if (!(e.controllable && a.runtime && a.runtime.kind === "compose")) return "";
-    const d = `data-venture="${esc(a.venture)}" data-app="${esc(a.slug)}" data-env="${esc(e.name)}"`;
+    const venture = a.venture || ventureSlug;
+    const d = `data-venture="${esc(venture)}" data-app="${esc(a.slug)}" data-env="${esc(e.name)}"`;
     return `<span class="studio-actions">
       <button type="button" class="toolbar-action" data-action="status" ${d}>status</button>
       <button type="button" class="toolbar-action" data-action="start" ${d}>start</button>
@@ -292,10 +294,17 @@
   }
   function renderLogs(esc, out) {
     if (out.unavailable) return `<p class="text-xs text-yellow">${esc(out.message)}</p>`;
-    if (out.error) return `<p class="text-xs text-yellow">refused: ${esc(out.error)}</p>`;
+    if (out.error) {
+      const detail = out.body && out.body.message ? `: ${esc(out.body.message)}` : "";
+      return `<p class="text-xs text-yellow">refused: ${esc(out.error)}${detail}</p>`;
+    }
     if (out.containers) return `<div class="text-xs">${out.containers.length ? out.containers.map(c => badge(esc, `${c.name} · ${c.state}${c.health ? " · " + c.health : ""}`)).join(" ") : "no containers for this project"}</div>`;
     if (out.lines) return `<pre class="studio-log">${esc(out.lines.join("\n"))}</pre>`;
-    if (out.url) return `<p class="text-xs">shell opened: <a class="text-blue" href="${esc(safeHref(out.url))}" target="_blank" rel="noopener">${esc(out.url)}</a> (expires in ${esc(Math.round((out.expires_at * 1000 - Date.now()) / 60000))} min)</p>`;
+    if (out.url) {
+      const cred = out.token ? ` <span class="text-subtext">login studio / ${esc(out.token)}</span>`
+        : (out.token === null ? ` <span class="text-subtext">${esc(out.note || "reuse the credentials from when it was opened")}</span>` : "");
+      return `<p class="text-xs">shell opened: <a class="text-blue" href="${esc(safeHref(out.url))}" target="_blank" rel="noopener">${esc(out.url)}</a>${cred} (expires in ${esc(Math.round((out.expires_at * 1000 - Date.now()) / 60000))} min)</p>`;
+    }
     return `<p class="text-xs">${out.ok ? "ok" : "failed"} · exit ${esc(out.exit)}${out.elapsed_ms != null ? ` · ${esc(Math.round(out.elapsed_ms))} ms` : ""}${out.output_tail ? `<pre class="studio-log">${esc(out.output_tail)}</pre>` : ""}${out.error ? `<span class="text-yellow"> ${esc(out.error)}</span>` : ""}</p>`;
   }
   function wireActions(root, esc) {
@@ -324,7 +333,7 @@
       ? `<p class="text-xs text-yellow mb-2">skipped unreadable manifests: ${doc.errors.map(esc).join(", ")}</p>` : "";
     const nowMs = Date.now();
     const stale = doc.snapshot.stale;
-    const opts = { stale, nowMs };
+    const opts = { stale, nowMs, venture: doc.venture.slug };
     root.innerHTML = `<div class="studio-grid">
       <section>
         <h2 class="font-pixel text-xs text-green mb-2">Library (${esc(doc.counts.apps)})</h2>

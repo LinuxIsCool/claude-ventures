@@ -51,7 +51,7 @@ def test_refusals_map_to_mutation_errors(tmp_path: Path):
 
 def test_shell_tools_over_http(tmp_path: Path):
     f = _Fake()
-    shells = A.Shells(tmp_path / "shells.json", popen=f.popen, kill=f.kill, alive=f.alive, which=f.which, free_port=f.free_port, now=f.now)
+    shells = A.Shells(tmp_path / "shells.json", popen=f.popen, kill=f.kill, alive=f.alive, which=f.which, free_port=f.free_port, now=f.now, log_path=tmp_path / "actions.log")
     port = _serve(tmp_path, lambda *a: (0, ""), shells=shells)
     st, body = _post(port, "studio_shell_open", {"venture": "acme", "app": "site"})
     assert st == 200 and body["result"]["url"] == "http://127.0.0.1:8901/"
@@ -73,7 +73,7 @@ def test_get_surfaces(tmp_path: Path):
 def test_shell_open_refuses_when_no_controllable_environment(tmp_path: Path):
     vroot = _root_no_controllable(tmp_path)
     f = _Fake()
-    shells = A.Shells(tmp_path / "shells.json", popen=f.popen, kill=f.kill, alive=f.alive, which=f.which, free_port=f.free_port, now=f.now)
+    shells = A.Shells(tmp_path / "shells.json", popen=f.popen, kill=f.kill, alive=f.alive, which=f.which, free_port=f.free_port, now=f.now, log_path=tmp_path / "actions.log")
     port = _serve(tmp_path, lambda *a: (0, ""), shells=shells, vroot=vroot)
     st, body = _post(port, "studio_shell_open", {"venture": "acme", "app": "site"})
     assert st >= 400 and body.get("code") == "NOT_CONTROLLABLE"

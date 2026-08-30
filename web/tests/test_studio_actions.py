@@ -179,8 +179,9 @@ class _Fake:
     def now(self): return self.t
 
 
-def _shells(tmp_path, fake):
-    return A.Shells(tmp_path / "shells.json", popen=fake.popen, kill=fake.kill, alive=fake.alive, which=fake.which, free_port=fake.free_port, now=fake.now)
+def _shells(tmp_path, fake, log_path=None):
+    return A.Shells(tmp_path / "shells.json", popen=fake.popen, kill=fake.kill, alive=fake.alive, which=fake.which,
+                     free_port=fake.free_port, now=fake.now, log_path=log_path or (tmp_path / "actions.log"))
 
 
 def test_shell_open_registers_and_limits(tmp_path: Path):
@@ -245,3 +246,87 @@ def test_shell_open_is_serialised(tmp_path: Path):
     assert all(e.code == "SHELL_LIMIT" for e in errors)
     rows = json.loads((tmp_path / "shells.json").read_text())
     assert len(rows) == A.SHELL_LIMIT
+
+
+# ---- finding 1: shell open/close reach the action log -----------------------
+
+def test_shell_open_and_close_log_to_action_log(tmp_path: Path):
+    f = _Fake(); log = tmp_path / "actions.log"
+    s = _shells(tmp_path, f, log_path=log)
+    out = s.open("acme", "site", str(tmp_path))
+    last = json.loads(log.read_text().splitlines()[-1])
+    assert last["action"] == "shell_open" and last["ok"] is True and last["port"] == out["port"] and last["pid"] == 101
+    assert out["token"] and out["token"] not in log.read_text()
+    s.close("acme", "site")
+    last = json.loads(log.read_text().splitlines()[-1])
+    assert last["action"] == "shell_close" and last["closed"] == 1
+
+
+def test_shell_open_refusal_logs_refused_code(tmp_path: Path):
+    f = _Fake(); f.which = lambda name: None
+    log = tmp_path / "actions.log"
+    s = _shells(tmp_path, f, log_path=log)
+    with pytest.raises(A.ActionRefused) as e:
+        s.open("acme", "site", str(tmp_path))
+    row = json.loads(log.read_text().splitlines()[-1])
+    assert row["action"] == "shell_open" and row["ok"] is False and row["refused"] == e.value.code == "TTYD_MISSING"
+
+
+# ---- finding 2: the registry lock is held across processes ------------------
+
+def test_registry_lock_file_is_held_during_open(tmp_path: Path, monkeypatch):
+    f = _Fake(); s = _shells(tmp_path, f)
+    ops: list[int] = []
+    real_flock = A.fcntl.flock
+
+    def recording_flock(fd, op):
+        ops.append(op)
+        return real_flock(fd, op)
+
+    monkeypatch.setattr(A.fcntl, "flock", recording_flock)
+    s.open("acme", "site", str(tmp_path))
+    assert A.fcntl.LOCK_EX in ops and A.fcntl.LOCK_UN in ops
+    assert ops.index(A.fcntl.LOCK_EX) < ops.index(A.fcntl.LOCK_UN)
+    assert (tmp_path / "shells.json.lock").exists()
+
+
+# ---- finding 3: _log() is safe under concurrent writers ---------------------
+
+def test_log_is_thread_safe(tmp_path: Path):
+    log = tmp_path / "actions.log"
+
+    def worker():
+        for i in range(20):
+            A._log(log, {"ts": "x", "action": "noop", "i": i})
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+    lines = log.read_text().splitlines()
+    assert len(lines) == 160
+    for ln in lines:
+        json.loads(ln)
+
+
+# ---- ruling: per-shell credential ---------------------------------------
+
+def test_shell_open_issues_a_random_token_credential(tmp_path: Path):
+    f = _Fake(); s = _shells(tmp_path, f)
+    out = s.open("acme", "site", str(tmp_path))
+    argv = f.spawned[0][0]
+    assert "-c" in argv and argv.index("-c") < argv.index("fish")
+    cred = argv[argv.index("-c") + 1]
+    assert cred.startswith("studio:") and len(cred) >= 20
+    assert out["token"] == cred.split("studio:", 1)[1]
+    assert out["user"] == "studio"
+    registry_raw = (tmp_path / "shells.json").read_text()
+    assert out["token"] not in registry_raw
+    assert json.loads(registry_raw)["acme/site"]["auth"] == "token"
+
+
+def test_shell_open_reuse_returns_no_token_and_a_note(tmp_path: Path):
+    f = _Fake(); s = _shells(tmp_path, f)
+    first = s.open("acme", "site", str(tmp_path))
+    second = s.open("acme", "site", str(tmp_path))
+    assert first["token"] and second["token"] is None
+    assert "reuse" in second["note"]

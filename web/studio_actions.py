@@ -9,9 +9,12 @@ so tests never touch Docker or spawn anything.
 Spec: backlog task-824 sections 6.5 and 6.6.
 """
 from __future__ import annotations
+import contextlib
+import fcntl
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import threading
@@ -110,10 +113,33 @@ def command(action: str, r: Resolved) -> list[str]:
     raise ActionRefused("BAD_ARG", f"unknown action {action!r}")
 
 
+def _lock_path(path: Path) -> Path:
+    return path.with_name(path.name + ".lock")
+
+
+@contextlib.contextmanager
+def _flock(path: Path):
+    """Cross-process mutual exclusion: hold an exclusive flock on a sidecar
+    `.lock` file for the duration of the caller's critical section. Pair with
+    a threading.Lock for the in-process case (flock does not exclude threads
+    of the same process the way it excludes other processes)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a+") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+_LOG_LOCK = threading.Lock()
+
+
 def _log(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+    with _LOG_LOCK, _flock(_lock_path(path)):
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, separators=(",", ":")) + "\n")
 
 
 def default_run(argv: list[str], timeout: float, cwd: str) -> tuple[int, str]:
@@ -223,10 +249,23 @@ def _lock_for(path: Path) -> threading.Lock:
 
 class Shells:
     def __init__(self, registry_path: Path | None = None, *, popen=default_popen, kill=default_kill, alive=default_alive,
-                 which=default_which, free_port=default_free_port, now=time.time) -> None:
+                 which=default_which, free_port=default_free_port, now=time.time, log_path: Path | None = None) -> None:
         self.path = Path(registry_path) if registry_path else SHELLS_DEFAULT
+        self.log_path = Path(log_path) if log_path else ACTION_LOG_DEFAULT
         self._popen, self._kill, self._alive, self._which, self._free_port, self._now = popen, kill, alive, which, free_port, now
         self._lock = _lock_for(self.path)
+        self._registry_lock_path = _lock_path(self.path)
+
+    def _shell_log(self, venture: str, app: str, action: str, *, argv: list[str] | None, **extra: Any) -> None:
+        row = {"ts": datetime.now(timezone.utc).isoformat(), "venture": venture, "app": app, "env": None,
+               "action": action, "argv": argv, "exit": None, "elapsed_ms": 0, "ok": True}
+        row.update(extra)
+        _log(self.log_path, row)
+
+    def _shell_log_refusal(self, venture: str, app: str, action: str, code: str) -> None:
+        row = {"ts": datetime.now(timezone.utc).isoformat(), "venture": venture, "app": app, "env": None,
+               "action": action, "argv": None, "exit": None, "elapsed_ms": 0, "ok": False, "refused": code}
+        _log(self.log_path, row)
 
     def _read(self) -> dict[str, Any]:
         try:
@@ -252,41 +291,53 @@ class Shells:
         return gone
 
     def sweep(self) -> int:
-        with self._lock:
+        with self._lock, _flock(self._registry_lock_path):
             return self._sweep_locked()
 
     def list(self) -> list[dict[str, Any]]:
-        with self._lock:
+        with self._lock, _flock(self._registry_lock_path):
             self._sweep_locked()
             return [dict(row, key=key) for key, row in sorted(self._read().items())]
 
     def open(self, venture: str, app: str, cwd: str) -> dict[str, Any]:
         v, a = _slug(venture, "venture"), _slug(app, "app")
-        with self._lock:
+        with self._lock, _flock(self._registry_lock_path):
             self._sweep_locked()
             rows = self._read(); key = f"{v}/{a}"
             if key in rows:
                 row = rows[key]
-                return {"ok": True, "url": f"http://127.0.0.1:{row['port']}/", "port": row["port"], "expires_at": row["expires_at"], "live": len(rows)}
+                self._shell_log(v, a, "shell_open", argv=None, port=row["port"], pid=row["pid"])
+                return {"ok": True, "url": f"http://127.0.0.1:{row['port']}/", "port": row["port"], "expires_at": row["expires_at"],
+                        "live": len(rows), "user": "studio", "token": None, "note": "reuse the credentials from when it was opened"}
             if not self._which("ttyd"):
+                self._shell_log_refusal(v, a, "shell_open", "TTYD_MISSING")
                 raise ActionRefused("TTYD_MISSING", f"ttyd is not installed; run {INSTALL_TTYD}")
             if len(rows) >= SHELL_LIMIT:
+                self._shell_log_refusal(v, a, "shell_open", "SHELL_LIMIT")
                 raise ActionRefused("SHELL_LIMIT", f"{SHELL_LIMIT} shells are already open; close one first")
             if not os.path.isdir(cwd):
+                self._shell_log_refusal(v, a, "shell_open", "NOT_DECLARED")
                 raise ActionRefused("NOT_DECLARED", f"repo path is not a directory: {cwd}")
             port = self._free_port()
-            argv = ["ttyd", "-p", str(port), "-i", "127.0.0.1", "-W", "-t", "disableLeaveAlert=true", "fish"]
+            token = secrets.token_urlsafe(18)
+            argv = ["ttyd", "-p", str(port), "-i", "127.0.0.1", "-W", "-t", "disableLeaveAlert=true", "-c", f"studio:{token}", "fish"]
             pid = self._popen(argv, cwd)
             opened = self._now()
-            rows[key] = {"venture": v, "app": a, "port": port, "pid": pid, "cwd": cwd, "opened_at": opened, "expires_at": opened + SHELL_TTL_S}
+            rows[key] = {"venture": v, "app": a, "port": port, "pid": pid, "cwd": cwd, "opened_at": opened,
+                         "expires_at": opened + SHELL_TTL_S, "auth": "token"}
             self._write(rows)
-            return {"ok": True, "url": f"http://127.0.0.1:{port}/", "port": port, "expires_at": rows[key]["expires_at"], "live": len(rows)}
+            redacted = [tok if not tok.startswith("studio:") else "studio:***" for tok in argv]
+            self._shell_log(v, a, "shell_open", argv=redacted, port=port, pid=pid)
+            return {"ok": True, "url": f"http://127.0.0.1:{port}/", "port": port, "expires_at": rows[key]["expires_at"],
+                    "live": len(rows), "user": "studio", "token": token}
 
     def close(self, venture: str, app: str) -> dict[str, Any]:
-        key = f"{_slug(venture, 'venture')}/{_slug(app, 'app')}"
-        with self._lock:
+        v, a = _slug(venture, "venture"), _slug(app, "app")
+        key = f"{v}/{a}"
+        with self._lock, _flock(self._registry_lock_path):
             rows = self._read(); closed = 0
             if key in rows:
                 self._kill(int(rows[key]["pid"])); rows.pop(key); closed = 1
                 self._write(rows)
+            self._shell_log(v, a, "shell_close", argv=None, closed=closed)
             return {"ok": True, "closed": closed}
