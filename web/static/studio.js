@@ -122,13 +122,16 @@
       id: n.id, label: `#${n.id} ${n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title}`,
       colour: n.external ? "#313244" : projectColour(projectIndex[n.project] || 0),
       border: n.external ? "#7f849c" : (PRIORITY_BORDER[n.priority] || "#89b4fa"),
+      // Project fills are light Catppuccin pastels; only the dark "external"
+      // fill (#313244) reads with light text. Everything else needs dark text.
+      text: n.external ? "#cdd6f4" : "#11111b",
       dashed: n.external ? "dashed" : "solid", faded: n.done ? 0.45 : 1, path: onPath.has(n.id) ? 1 : 0, href: n.href } }); });
     net.edges.forEach(e => { if (visible.has(e.source) && visible.has(e.target)) elements.push({ data: {
       id: e.source + "->" + e.target, source: e.source, target: e.target, path: onPath.has(e.source) && onPath.has(e.target) ? 1 : 0 } }); });
     const cy = window.cytoscape({ container, elements,
       style: [
         { selector: "node", style: { "background-color": "data(colour)", "border-color": "data(border)", "border-width": 2,
-          "border-style": "data(dashed)", label: "data(label)", "font-size": 13, "font-family": "monospace", color: "#cdd6f4",
+          "border-style": "data(dashed)", label: "data(label)", "font-size": 13, "font-family": "monospace", color: "data(text)",
           "text-wrap": "wrap", "text-max-width": 165, "text-valign": "center", shape: "round-rectangle", width: 190, height: 44,
           opacity: "data(faded)" } },
         { selector: "node[path = 1]", style: { "border-width": 4, "border-color": "#f9e2af" } },
