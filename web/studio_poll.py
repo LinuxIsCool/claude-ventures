@@ -27,6 +27,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+import studio_actions
 import studio_snapshot
 import ventures_apps
 import ventures_git
@@ -35,6 +36,8 @@ HTTP_TIMEOUT_S = 6.0
 DOCKER_TIMEOUT_S = 8.0
 CERT_TTL_S = 3600
 FLEET_DEFAULT = Path.home() / ".claude" / "local" / "fleet" / "webui-registry.json"
+
+_shells_factory: Callable[[], Any] = lambda: studio_actions.Shells()
 
 
 # ---- default I/O seams ------------------------------------------------------
@@ -204,8 +207,15 @@ def build_snapshot(ventures_root: Path, *, fetch: Callable, run: Callable, tls: 
             apps[key] = {"git": git, "environments": envs, "containers": containers, "containers_error": cerr}
         for e in ventures_apps.errors_for(venture, ventures_root=ventures_root):
             errors.append(f"{venture}: unreadable manifest {e}")
+    try:
+        shells = _shells_factory()
+        shells.sweep()
+        snap_shells = shells.list()
+    except Exception as exc:
+        snap_shells = []
+        errors.append(f"shells: {type(exc).__name__}: {exc}")
     return {"generated_at": stamp, "interval_s": interval_s, "elapsed_ms": round((time.perf_counter() - t0) * 1000, 3),
-            "apps": apps, "certs": certs, "fleet": fleet_entries(fleet_path), "errors": errors}
+            "apps": apps, "certs": certs, "fleet": fleet_entries(fleet_path), "errors": errors, "shells": snap_shells}
 
 
 def run_once(snapshot_path: Path | None, ventures_root: Path | None, interval_s: int) -> dict[str, Any]:

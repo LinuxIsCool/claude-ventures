@@ -170,6 +170,46 @@ def test_build_snapshot_collector_failure_is_recorded_not_raised(tmp_path: Path)
     assert snap["certs"]["acme.test"]["error"]
 
 
+def test_build_snapshot_sweeps_and_records_shells(tmp_path: Path, monkeypatch):
+    vroot = _vroot(tmp_path)
+    fetch = lambda url, headers, timeout: (200, b"{}")
+    run = lambda argv, timeout: "" if argv[:2] == ["docker", "ps"] else "{}"
+    tls = lambda host: "Nov  8 01:20:21 2026 GMT"
+    calls = {"sweep": 0}
+
+    class FakeShells:
+        def sweep(self):
+            calls["sweep"] += 1
+            return calls["sweep"]
+
+        def list(self):
+            return [{"key": "acme/site", "port": 8901}]
+
+    monkeypatch.setattr(P, "_shells_factory", lambda: FakeShells())
+    snap = P.build_snapshot(vroot, fetch=fetch, run=run, tls=tls, previous=None, now=datetime.now(timezone.utc))
+    assert snap["shells"] == [{"key": "acme/site", "port": 8901}]
+    assert calls["sweep"] == 1
+
+
+def test_build_snapshot_shells_failure_is_recorded_not_raised(tmp_path: Path, monkeypatch):
+    vroot = _vroot(tmp_path)
+    fetch = lambda url, headers, timeout: (200, b"{}")
+    run = lambda argv, timeout: "" if argv[:2] == ["docker", "ps"] else "{}"
+    tls = lambda host: "Nov  8 01:20:21 2026 GMT"
+
+    class FakeShells:
+        def sweep(self):
+            raise Boom("registry locked")
+
+        def list(self):
+            raise AssertionError("list() should not be reached after sweep() raises")
+
+    monkeypatch.setattr(P, "_shells_factory", lambda: FakeShells())
+    snap = P.build_snapshot(vroot, fetch=fetch, run=run, tls=tls, previous=None, now=datetime.now(timezone.utc))
+    assert snap["shells"] == []
+    assert any(e.startswith("shells:") for e in snap["errors"])
+
+
 def test_main_once_writes_snapshot(tmp_path: Path, monkeypatch):
     vroot = _vroot(tmp_path)
     monkeypatch.setattr(P, "default_fetch", lambda url, headers, timeout: (200, b"{}"))
