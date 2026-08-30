@@ -81,6 +81,18 @@ def resolve(venture: str, app: str, env: str, ventures_root: Path | None = None)
     return Resolved(v, a, e, _slug(runtime["project"], "runtime.project"), file, cwd, _controllable(envs[0]))
 
 
+def resolve_repo(venture: str, app: str, ventures_root: Path | None = None) -> str:
+    v, a = _slug(venture, "venture"), _slug(app, "app")
+    manifest = ventures_apps.get(v, a, ventures_root=ventures_root)
+    if not manifest:
+        raise ActionRefused("NOT_DECLARED", f"no app manifest for {v}/{a}")
+    repo = manifest.get("repo") if isinstance(manifest.get("repo"), dict) else {}
+    path = os.path.expanduser(str(repo.get("path") or ""))
+    if not path or not os.path.isdir(path):
+        raise ActionRefused("NOT_DECLARED", f"repo path is not declared or not a directory for {v}/{a}")
+    return path
+
+
 def command(action: str, r: Resolved) -> list[str]:
     base = ["docker", "compose", "-p", r.project, "-f", r.file]
     if action == "start":

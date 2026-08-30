@@ -68,6 +68,13 @@ def test_resolve_refusals(tmp_path: Path):
     assert e.value.code == "NOT_DECLARED" and "compose file" in e.value.message
 
 
+def test_resolve_repo_returns_repo_path_or_refuses(tmp_path: Path):
+    vroot = _root(tmp_path)
+    assert A.resolve_repo("acme", "site", ventures_root=vroot) == str(tmp_path / "repo")
+    with pytest.raises(A.ActionRefused) as e: A.resolve_repo("acme", "nope", ventures_root=vroot)
+    assert e.value.code == "NOT_DECLARED"
+
+
 def test_commands_are_exact(tmp_path: Path):
     r = A.resolve("acme", "site", "dev", ventures_root=_root(tmp_path))
     assert A.command("start", r) == ["docker", "compose", "-p", "acme-site", "-f", r.file, "start"]
