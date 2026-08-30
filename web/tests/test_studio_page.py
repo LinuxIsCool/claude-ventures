@@ -37,3 +37,5 @@ def test_studio_module_defines_mount_and_sections():
         assert needle in js
     assert "Number.isNaN(t)" in js  # a malformed ISO string renders "", never "NaNh ago"
     assert "—" not in js  # no em-dashes in copy
+    for needle in ("studio-actions/api/mutate", "actionButtons(", "data-action=", "studio_shell_open", "confirm(", "renderLogs("):
+        assert needle in js

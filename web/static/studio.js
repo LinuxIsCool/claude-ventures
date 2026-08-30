@@ -21,9 +21,9 @@
     return `<span class="text-blue">${esc(g.branch)}</span> @ <code>${esc(g.head)}</code> · ${dirty}${wt}${when} · ${esc(g.vcs)}`;
   }
 
-  function envRows(esc, envs, opts) {
+  function envRows(esc, envs, opts, a) {
     if (!envs.length) return `<p class="text-subtext text-xs">no environments declared</p>`;
-    return `<table class="studio-table text-xs"><thead><tr><th>env</th><th>url</th><th>host</th><th>deploy</th><th>status</th><th>live</th><th>control</th></tr></thead><tbody>` +
+    return `<table class="studio-table text-xs"><thead><tr><th>env</th><th>url</th><th>host</th><th>deploy</th><th>status</th><th>live</th><th>control</th><th>actions</th></tr></thead><tbody>` +
       envs.map(e => `<tr>
         <td>${esc(e.name)}</td>
         <td>${e.url ? `<a class="text-blue" href="${esc(safeHref(e.url))}" target="_blank" rel="noopener">${esc(e.url)}</a>` : `<span class="text-subtext">none</span>`}</td>
@@ -32,6 +32,7 @@
         <td>${badge(esc, e.status || "declared")}</td>
         <td>${liveBadge(esc, e.live, opts.stale, opts.nowMs)}</td>
         <td>${e.controllable ? badge(esc, "controllable", "text-green") : `<span class="text-subtext">read only</span>`}</td>
+        <td>${actionButtons(esc, a, e)}</td>
       </tr>`).join("") + `</tbody></table>`;
   }
 
@@ -51,7 +52,7 @@
       <div class="text-xs mt-1">${gitLine(esc, a.git)}</div>
       ${a.run ? `<div class="text-xs mt-1 text-subtext">run: <code>${esc(a.run)}</code>${a.test ? ` · test: <code>${esc(a.test)}</code>` : ""}</div>` : ""}
       ${a.status_doc ? `<div class="text-xs text-subtext">status doc: <code>${esc(a.status_doc)}</code></div>` : ""}
-      <div class="mt-2">${envRows(esc, a.environments || [], opts)}</div>
+      <div class="mt-2">${envRows(esc, a.environments || [], opts, a)}</div>
       ${containerChips(esc, a.live)}
       ${deps ? `<div class="text-xs mt-2">depends on ${deps}</div>` : ""}
       ${runtime}
@@ -269,6 +270,49 @@
     }).join(" ") + `</div>`;
   }
 
+  // ---- actions (studio-actions satellite; declared-only, dev only) ----------
+  const ACTIONS_URL = "/studio-actions/api/mutate";
+  async function mutate(tool, args) {
+    const r = await fetch(ACTIONS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tool, args }) });
+    let body = null; try { body = await r.json(); } catch (_) { body = null; }
+    if (r.status === 404 && !body) return { unavailable: true, message: "studio-actions mount is not running" };
+    if (!r.ok) return { error: (body && (body.code || body.error || body.message)) || `HTTP ${r.status}`, body };
+    return body.result || body;
+  }
+  function actionButtons(esc, a, e) {
+    if (!(e.controllable && a.runtime && a.runtime.kind === "compose")) return "";
+    const d = `data-venture="${esc(a.venture)}" data-app="${esc(a.slug)}" data-env="${esc(e.name)}"`;
+    return `<span class="studio-actions">
+      <button type="button" class="toolbar-action" data-action="status" ${d}>status</button>
+      <button type="button" class="toolbar-action" data-action="start" ${d}>start</button>
+      <button type="button" class="toolbar-action" data-action="stop" ${d}>stop</button>
+      <button type="button" class="toolbar-action" data-action="logs" ${d}>logs</button>
+      <button type="button" class="toolbar-action" data-action="shell" ${d}>shell</button>
+    </span>`;
+  }
+  function renderLogs(esc, out) {
+    if (out.unavailable) return `<p class="text-xs text-yellow">${esc(out.message)}</p>`;
+    if (out.error) return `<p class="text-xs text-yellow">refused: ${esc(out.error)}</p>`;
+    if (out.containers) return `<div class="text-xs">${out.containers.length ? out.containers.map(c => badge(esc, `${c.name} · ${c.state}${c.health ? " · " + c.health : ""}`)).join(" ") : "no containers for this project"}</div>`;
+    if (out.lines) return `<pre class="studio-log">${esc(out.lines.join("\n"))}</pre>`;
+    if (out.url) return `<p class="text-xs">shell opened: <a class="text-blue" href="${esc(safeHref(out.url))}" target="_blank" rel="noopener">${esc(out.url)}</a> (expires in ${esc(Math.round((out.expires_at * 1000 - Date.now()) / 60000))} min)</p>`;
+    return `<p class="text-xs">${out.ok ? "ok" : "failed"} · exit ${esc(out.exit)}${out.elapsed_ms != null ? ` · ${esc(Math.round(out.elapsed_ms))} ms` : ""}${out.output_tail ? `<pre class="studio-log">${esc(out.output_tail)}</pre>` : ""}${out.error ? `<span class="text-yellow"> ${esc(out.error)}</span>` : ""}</p>`;
+  }
+  function wireActions(root, esc) {
+    root.querySelectorAll("[data-action]").forEach(btn => btn.onclick = async () => {
+      const { action, venture, app, env } = btn.dataset;
+      const card = btn.closest("article"); let panel = card.querySelector("[data-action-output]");
+      if (!panel) { panel = document.createElement("div"); panel.setAttribute("data-action-output", ""); panel.className = "mt-2"; card.appendChild(panel); }
+      if (action === "stop" && !window.confirm(`Stop ${app} ${env}? (compose stop; volumes untouched)`)) return;
+      panel.innerHTML = `<p class="text-xs text-subtext">${esc(action)}…</p>`;
+      const tool = action === "shell" ? "studio_shell_open" : `studio_${action}`;
+      const args = action === "shell" ? { venture, app } : { venture, app, env };
+      const out = await mutate(tool, args);
+      panel.innerHTML = renderLogs(esc, out);
+      if (out.url) window.open(safeHref(out.url), "_blank", "noopener");
+    });
+  }
+
   async function mount(root, slug, helpers) {
     const { api, esc } = helpers;
     root.innerHTML = `<p class="text-subtext text-xs">loading studio…</p>`;
@@ -298,6 +342,7 @@
       <section class="mt-4"><h2 class="font-pixel text-xs text-green mb-2">Network</h2><div data-network></div></section>`;
     renderNetwork(root.querySelector("[data-network]"), slug, helpers);
     renderMeetings(root.querySelector("[data-meetings]"), slug, helpers);
+    wireActions(root, esc);
   }
 
   window.VenturesStudio = { mount };
