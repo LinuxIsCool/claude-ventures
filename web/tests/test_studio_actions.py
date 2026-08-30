@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import threading
 from pathlib import Path
 import sys
 
@@ -46,6 +47,38 @@ def _root(tmp_path: Path, file: str | None = "deploy/compose.yml") -> Path:
     return vroot
 
 
+NO_CONTROLLABLE_MANIFEST = """---
+slug: site
+name: Site
+venture: acme
+kind: static
+stage: active
+repo:
+  path: {repo}
+environments:
+  - name: prod
+    url: http://prod.local
+    controllable: false
+runtime:
+  kind: compose
+  file: deploy/compose.yml
+  project: acme-site
+depends_on: []
+---
+"""
+
+
+def _root_no_controllable(tmp_path: Path) -> Path:
+    """Like _root(), but every declared environment is controllable: false
+    (a CIE-shaped manifest) so no shell is ever permitted for this app."""
+    vroot = tmp_path / "ventures"
+    repo = tmp_path / "repo"; (repo / "deploy").mkdir(parents=True)
+    (repo / "deploy" / "compose.yml").write_text("name: acme-site\nservices: {}\n")
+    d = vroot / "acme" / "apps" / "site"; d.mkdir(parents=True)
+    (d / "app.md").write_text(NO_CONTROLLABLE_MANIFEST.format(repo=str(repo)))
+    return vroot
+
+
 def test_resolve_declared_and_controllable(tmp_path: Path):
     vroot = _root(tmp_path)
     r = A.resolve("acme", "site", "dev", ventures_root=vroot)
@@ -73,6 +106,12 @@ def test_resolve_repo_returns_repo_path_or_refuses(tmp_path: Path):
     assert A.resolve_repo("acme", "site", ventures_root=vroot) == str(tmp_path / "repo")
     with pytest.raises(A.ActionRefused) as e: A.resolve_repo("acme", "nope", ventures_root=vroot)
     assert e.value.code == "NOT_DECLARED"
+
+
+def test_resolve_repo_requires_a_controllable_environment(tmp_path: Path):
+    vroot = _root_no_controllable(tmp_path)
+    with pytest.raises(A.ActionRefused) as e: A.resolve_repo("acme", "site", ventures_root=vroot)
+    assert e.value.code == "NOT_CONTROLLABLE"
 
 
 def test_commands_are_exact(tmp_path: Path):
@@ -173,3 +212,36 @@ def test_shell_close_and_missing_ttyd(tmp_path: Path):
     s2 = _shells(tmp_path, f)
     with pytest.raises(A.ActionRefused) as e: s2.open("acme", "site", str(tmp_path))
     assert e.value.code == "TTYD_MISSING" and "install-ttyd.sh" in e.value.message
+
+
+def test_shell_open_is_serialised(tmp_path: Path):
+    f = _Fake()
+    real_popen = f.popen
+
+    def slow_popen(argv, cwd):
+        import time as _time
+        _time.sleep(0.05)
+        return real_popen(argv, cwd)
+
+    f.popen = slow_popen
+    s = _shells(tmp_path, f)
+
+    results: list[dict] = []
+    errors: list[A.ActionRefused] = []
+
+    def worker(i: int) -> None:
+        try:
+            results.append(s.open("acme", f"app{i}", str(tmp_path)))
+        except A.ActionRefused as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(6)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+
+    assert len(results) == A.SHELL_LIMIT
+    assert len(f.spawned) == A.SHELL_LIMIT
+    assert len(errors) == 6 - A.SHELL_LIMIT
+    assert all(e.code == "SHELL_LIMIT" for e in errors)
+    rows = json.loads((tmp_path / "shells.json").read_text())
+    assert len(rows) == A.SHELL_LIMIT

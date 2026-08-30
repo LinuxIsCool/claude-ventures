@@ -9,11 +9,12 @@ if str(HERE) not in sys.path:
 
 import actions_server
 import studio_actions as A
-from test_studio_actions import _root, _Fake  # noqa: E402  (fixtures from Task 1)
+from test_studio_actions import _root, _root_no_controllable, _Fake  # noqa: E402  (fixtures from Task 1)
 
 
-def _serve(tmp_path: Path, run, shells=None):
-    vroot = _root(tmp_path)
+def _serve(tmp_path: Path, run, shells=None, vroot=None):
+    if vroot is None:
+        vroot = _root(tmp_path)
     k = actions_server.build_kernel(port=0, ventures_root=vroot, log_path=tmp_path / "actions.log",
                                     shells_path=tmp_path / "shells.json", run=run, shells=shells,
                                     audit_dir=tmp_path / "audit")
@@ -67,3 +68,13 @@ def test_get_surfaces(tmp_path: Path):
     assert r.status == 200 and h["ok"] is True and h["namespace"] == "legion.studio-actions"
     c.request("GET", "/"); r = c.getresponse(); assert r.status == 200 and b"ventures" in r.read()
     c.request("GET", "/api/list"); r = c.getresponse(); assert r.status == 200
+
+
+def test_shell_open_refuses_when_no_controllable_environment(tmp_path: Path):
+    vroot = _root_no_controllable(tmp_path)
+    f = _Fake()
+    shells = A.Shells(tmp_path / "shells.json", popen=f.popen, kill=f.kill, alive=f.alive, which=f.which, free_port=f.free_port, now=f.now)
+    port = _serve(tmp_path, lambda *a: (0, ""), shells=shells, vroot=vroot)
+    st, body = _post(port, "studio_shell_open", {"venture": "acme", "app": "site"})
+    assert st >= 400 and body.get("code") == "NOT_CONTROLLABLE"
+    assert f.spawned == []

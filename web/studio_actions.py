@@ -14,6 +14,7 @@ import os
 import re
 import socket
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -86,6 +87,9 @@ def resolve_repo(venture: str, app: str, ventures_root: Path | None = None) -> s
     manifest = ventures_apps.get(v, a, ventures_root=ventures_root)
     if not manifest:
         raise ActionRefused("NOT_DECLARED", f"no app manifest for {v}/{a}")
+    envs = [x for x in (manifest.get("environments") or []) if isinstance(x, dict)]
+    if not any(_controllable(x) for x in envs):
+        raise ActionRefused("NOT_CONTROLLABLE", f"{v}/{a} has no controllable environment, so no shell")
     repo = manifest.get("repo") if isinstance(manifest.get("repo"), dict) else {}
     path = os.path.expanduser(str(repo.get("path") or ""))
     if not path or not os.path.isdir(path):
@@ -159,7 +163,9 @@ def perform(action: str, venture: str, app: str, env: str, *, run: Callable, log
 def default_popen(argv: list[str], cwd: str) -> int:
     log_dir = ACTION_LOG_DEFAULT.parent
     log_dir.mkdir(parents=True, exist_ok=True)
-    fh = open(log_dir / f"studio-shell-{argv[2]}.log", "ab")  # noqa: SIM115 -- lives as long as the child
+    fh = open(log_dir / f"studio-shell-{argv[2]}.log", "ab")  # noqa: SIM115 -- this handle closes
+    # when this function returns (CPython refcounts fh to zero); the child keeps its own dup
+    # of the fd via stdout=fh below, so the log file stays open for as long as the child runs.
     return subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=fh, stderr=subprocess.STDOUT, start_new_session=True).pid
 
 
@@ -196,11 +202,31 @@ def default_free_port(lo: int = 8900, hi: int = 8999) -> int:
     raise ActionRefused("NO_PORT", "no free port in 8900-8999")
 
 
+_SHELLS_LOCKS: dict[str, threading.Lock] = {}
+_SHELLS_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(path: Path) -> threading.Lock:
+    """One lock per resolved registry path, shared across every Shells instance
+    that points at the same file. Concurrent HTTP handlers each construct
+    their own Shells (or share one on the kernel); either way, two opens
+    against the same registry must serialise, not just two calls on one
+    object."""
+    key = os.path.abspath(str(path))
+    with _SHELLS_LOCKS_GUARD:
+        lock = _SHELLS_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _SHELLS_LOCKS[key] = lock
+        return lock
+
+
 class Shells:
     def __init__(self, registry_path: Path | None = None, *, popen=default_popen, kill=default_kill, alive=default_alive,
                  which=default_which, free_port=default_free_port, now=time.time) -> None:
         self.path = Path(registry_path) if registry_path else SHELLS_DEFAULT
         self._popen, self._kill, self._alive, self._which, self._free_port, self._now = popen, kill, alive, which, free_port, now
+        self._lock = _lock_for(self.path)
 
     def _read(self) -> dict[str, Any]:
         try:
@@ -214,7 +240,7 @@ class Shells:
         tmp.write_text(json.dumps(rows, indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
 
-    def sweep(self) -> int:
+    def _sweep_locked(self) -> int:
         rows = self._read(); now = self._now(); gone = 0
         for key, row in list(rows.items()):
             expired = now >= float(row.get("expires_at", 0))
@@ -225,35 +251,42 @@ class Shells:
         self._write(rows)
         return gone
 
+    def sweep(self) -> int:
+        with self._lock:
+            return self._sweep_locked()
+
     def list(self) -> list[dict[str, Any]]:
-        self.sweep()
-        return [dict(row, key=key) for key, row in sorted(self._read().items())]
+        with self._lock:
+            self._sweep_locked()
+            return [dict(row, key=key) for key, row in sorted(self._read().items())]
 
     def open(self, venture: str, app: str, cwd: str) -> dict[str, Any]:
         v, a = _slug(venture, "venture"), _slug(app, "app")
-        self.sweep()
-        rows = self._read(); key = f"{v}/{a}"
-        if key in rows:
-            row = rows[key]
-            return {"ok": True, "url": f"http://127.0.0.1:{row['port']}/", "port": row["port"], "expires_at": row["expires_at"], "live": len(rows)}
-        if not self._which("ttyd"):
-            raise ActionRefused("TTYD_MISSING", f"ttyd is not installed; run {INSTALL_TTYD}")
-        if len(rows) >= SHELL_LIMIT:
-            raise ActionRefused("SHELL_LIMIT", f"{SHELL_LIMIT} shells are already open; close one first")
-        if not os.path.isdir(cwd):
-            raise ActionRefused("NOT_DECLARED", f"repo path is not a directory: {cwd}")
-        port = self._free_port()
-        argv = ["ttyd", "-p", str(port), "-i", "127.0.0.1", "-W", "-t", "disableLeaveAlert=true", "fish"]
-        pid = self._popen(argv, cwd)
-        opened = self._now()
-        rows[key] = {"venture": v, "app": a, "port": port, "pid": pid, "cwd": cwd, "opened_at": opened, "expires_at": opened + SHELL_TTL_S}
-        self._write(rows)
-        return {"ok": True, "url": f"http://127.0.0.1:{port}/", "port": port, "expires_at": rows[key]["expires_at"], "live": len(rows)}
+        with self._lock:
+            self._sweep_locked()
+            rows = self._read(); key = f"{v}/{a}"
+            if key in rows:
+                row = rows[key]
+                return {"ok": True, "url": f"http://127.0.0.1:{row['port']}/", "port": row["port"], "expires_at": row["expires_at"], "live": len(rows)}
+            if not self._which("ttyd"):
+                raise ActionRefused("TTYD_MISSING", f"ttyd is not installed; run {INSTALL_TTYD}")
+            if len(rows) >= SHELL_LIMIT:
+                raise ActionRefused("SHELL_LIMIT", f"{SHELL_LIMIT} shells are already open; close one first")
+            if not os.path.isdir(cwd):
+                raise ActionRefused("NOT_DECLARED", f"repo path is not a directory: {cwd}")
+            port = self._free_port()
+            argv = ["ttyd", "-p", str(port), "-i", "127.0.0.1", "-W", "-t", "disableLeaveAlert=true", "fish"]
+            pid = self._popen(argv, cwd)
+            opened = self._now()
+            rows[key] = {"venture": v, "app": a, "port": port, "pid": pid, "cwd": cwd, "opened_at": opened, "expires_at": opened + SHELL_TTL_S}
+            self._write(rows)
+            return {"ok": True, "url": f"http://127.0.0.1:{port}/", "port": port, "expires_at": rows[key]["expires_at"], "live": len(rows)}
 
     def close(self, venture: str, app: str) -> dict[str, Any]:
         key = f"{_slug(venture, 'venture')}/{_slug(app, 'app')}"
-        rows = self._read(); closed = 0
-        if key in rows:
-            self._kill(int(rows[key]["pid"])); rows.pop(key); closed = 1
-            self._write(rows)
-        return {"ok": True, "closed": closed}
+        with self._lock:
+            rows = self._read(); closed = 0
+            if key in rows:
+                self._kill(int(rows[key]["pid"])); rows.pop(key); closed = 1
+                self._write(rows)
+            return {"ok": True, "closed": closed}
